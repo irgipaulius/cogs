@@ -170,6 +170,19 @@ export default function App() {
   };
 
   const uploadImage = async (id, file) => {
+    const item = todos.find((t) => t.id === id);
+    if (item) {
+      try {
+        await pushTodo({
+          ...item,
+          client_id: clientId,
+          updated_at: new Date().toISOString(),
+        });
+      } catch {
+        setStatus({ msg: "Sync todo before upload failed — check connection", ok: false });
+        return;
+      }
+    }
     const fd = new FormData();
     fd.append("image", file);
     setBusy(true);

@@ -24,12 +24,11 @@ func TestUpsertAndList(t *testing.T) {
 	if err := s.Upsert(ctx, it); err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.List(ctx, "")
+	list, err := s.List(ctx, "", "c1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 3 bootstrap rows from migration 00002 + 1 upsert
-	if len(list) != 4 {
-		t.Fatalf("list len=%d want 4", len(list))
+	if len(list) != 1 {
+		t.Fatalf("list len=%d want 1", len(list))
 	}
 }

@@ -40,6 +40,9 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
+    env_file:
+      - path: .env.docker
+        required: false
     ports:
       - "${COGS_TODO_PORT:-18787}:18787"
     environment:
@@ -55,8 +58,6 @@ services:
       COGS_MAX_UPLOAD_BYTES: ${COGS_MAX_UPLOAD_BYTES:-104857600}
       COGS_OBS: "off"
       COGS_SESSION_SECRET: ${COGS_SESSION_SECRET:-docker-dev-change-me}
-      COGS_PUBLIC_PAGE_ORIGIN: ${COGS_PUBLIC_PAGE_ORIGIN:-http://127.0.0.1:8788}
-      COGS_PUBLIC_API_URL: ${COGS_PUBLIC_API_URL:-http://127.0.0.1:18787}
       COGS_APP_NAME: todo
       COGS_TELEMETRY_PATH: /data/telemetry.json
     volumes:

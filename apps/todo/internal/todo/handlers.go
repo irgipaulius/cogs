@@ -37,7 +37,7 @@ func clientID(r *http.Request) string {
 
 func (a *API) list(w http.ResponseWriter, r *http.Request) {
 	since := r.URL.Query().Get("since")
-	items, err := a.Store.List(r.Context(), since)
+	items, err := a.Store.List(r.Context(), since, clientID(r))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -112,8 +112,9 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 502)
 		return
 	}
-	if err := a.Store.SetImageKey(r.Context(), id, clientID(r), key); err != nil {
-		http.Error(w, err.Error(), 404)
+	cid := clientID(r)
+	if err := a.Store.SetImageKey(r.Context(), id, cid, key); err != nil {
+		http.Error(w, "todo not found for this device — sync the item first", 404)
 		return
 	}
 	writeJSON(w, map[string]string{"image_r2_key": key})
@@ -125,19 +126,8 @@ func (a *API) getImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	items, err := a.Store.List(r.Context(), "")
+	key, err := a.Store.ImageKeyByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	var key string
-	for _, it := range items {
-		if it.ID == id {
-			key = it.ImageR2Key
-			break
-		}
-	}
-	if key == "" {
 		http.Error(w, "no image", 404)
 		return
 	}

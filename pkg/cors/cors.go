@@ -9,14 +9,14 @@ import (
 func Middleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	set := map[string]struct{}{}
 	for _, o := range allowedOrigins {
-		o = strings.TrimSpace(o)
+		o = normalizeOrigin(o)
 		if o != "" {
 			set[o] = struct{}{}
 		}
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
+			origin := normalizeOrigin(r.Header.Get("Origin"))
 			if origin != "" {
 				_, star := set["*"]
 				_, ok := set[origin]
@@ -35,4 +35,9 @@ func Middleware(allowedOrigins []string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func normalizeOrigin(o string) string {
+	o = strings.TrimSpace(o)
+	return strings.TrimRight(o, "/")
 }

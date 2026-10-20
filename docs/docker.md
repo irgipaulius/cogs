@@ -9,9 +9,11 @@ Cloudflare **Pages, Tunnel, and DNS** are still provisioned with the **`cogs` CL
 From the **repo root**, run todo and the public admin dashboard together:
 
 ```bash
-cp .env.docker.example .env.docker   # optional; defaults include admin login
+cp .env.docker.example .env.docker   # admin login + **CORS** (`COGS_PUBLIC_PAGE_ORIGIN` for Pages → API)
 docker compose up --build -d
 ```
+
+If the todo UI on Cloudflare Pages gets **CORS / Failed to fetch**, the API container is missing `COGS_PUBLIC_PAGE_ORIGIN` (must match `https://todo.<zone>`). Set it in `.env.docker` and `docker compose up -d todo-api --force-recreate`.
 
 - **Admin UI**: http://127.0.0.1:18786 — default login `admin` / `CogsAdmin-Docker-2026!` (change in `.env.docker`).
 - **Todo API**: http://127.0.0.1:18787/health
