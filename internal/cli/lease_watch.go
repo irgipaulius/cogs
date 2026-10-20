@@ -13,6 +13,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/config"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/runner"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 type runnerLease struct {
@@ -21,21 +22,41 @@ type runnerLease struct {
 }
 
 func cmdLease(args []string) error {
-	if len(args) < 1 || args[0] != "watch" {
-		return fmt.Errorf("usage: cogs lease watch [--dir appdir]")
-	}
-	dir := "."
-	for i := 1; i < len(args); i++ {
-		if args[i] == "--dir" && i+1 < len(args) {
-			dir = args[i+1]
-			i++
-		}
+	dir, err := parseLeaseArgs(args)
+	if err != nil {
+		return err
 	}
 	abs, err := resolveLaunchProjectDir(dir)
 	if err != nil {
 		return err
 	}
 	return runLeaseWatch(abs, 0)
+}
+
+// parseLeaseArgs accepts `cogs lease` and `cogs lease watch` (watchdogs call both).
+func parseLeaseArgs(args []string) (dir string, err error) {
+	dir = "."
+	if len(args) > 0 && args[0] == "watch" {
+		args = args[1:]
+	}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--dir":
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("usage: cogs lease [watch] [--dir appdir]")
+			}
+			i++
+			dir = args[i]
+		case "-h", "--help":
+			return "", fmt.Errorf("usage: cogs lease [watch] [--dir appdir]")
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				return "", fmt.Errorf("usage: cogs lease [watch] [--dir appdir]")
+			}
+			dir = args[i]
+		}
+	}
+	return dir, nil
 }
 
 func runLeaseWatch(projectDir string, interval time.Duration) error {
@@ -66,6 +87,11 @@ func runLeaseWatch(projectDir string, interval time.Duration) error {
 		if globals.DryRun {
 			return nil
 		}
+		if watchdogPaused(projectDir) {
+			ux.Warn("watchdog.pause present — yielding local tunnel and API")
+			yieldLocalRunner(projectDir, m)
+			return nil
+		}
 		remote, err := fetchRunnerLease(client, leaseURL)
 		if err != nil {
 			time.Sleep(interval)
@@ -84,10 +110,29 @@ func runLeaseWatch(projectDir string, interval time.Duration) error {
 			continue
 		}
 		ux.Warn(fmt.Sprintf("yielding to runner %s (claimed %s)", remote.RunnerID, remote.ClaimedAt))
-		_ = stopTunnel(projectDir, m.TunnelName)
-		stopApp(projectDir)
+		yieldLocalRunner(projectDir, m)
 		return nil
 	}
+}
+
+func yieldLocalRunner(projectDir string, m launch.Manifest) {
+	_ = stopTunnel(projectDir, m.TunnelName)
+	stopApp(projectDir)
+}
+
+// watchdogPaused is the manual handover switch: touch .cogs/watchdog.pause
+// in the app dir or workspace root.
+func watchdogPaused(projectDir string) bool {
+	paths := []string{filepath.Join(projectDir, ".cogs", "watchdog.pause")}
+	if root, _, err := workspace.FindRoot(projectDir); err == nil {
+		paths = append(paths, filepath.Join(root, ".cogs", "watchdog.pause"))
+	}
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchRunnerLease(client *http.Client, url string) (runnerLease, error) {

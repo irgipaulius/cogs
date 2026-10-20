@@ -195,7 +195,7 @@ func runLaunch(flags launchFlags) error {
 		if err := ensureAdminInitialized(abs); err != nil {
 			return err
 		}
-	} else if err := runGo(abs, "run", "./cmd/app", "migrate", "-env", ".env"); err != nil {
+	} else if err := runAppBinary(abs, "migrate", "-env", ".env"); err != nil {
 		return err
 	}
 
@@ -248,7 +248,7 @@ func runLaunch(flags launchFlags) error {
 			<-sig
 			os.Exit(0)
 		}()
-		return runGo(abs, "run", "./cmd/app", "serve", "-env", ".env")
+		return runAppBinary(abs, "serve", "-env", ".env")
 	}
 	if !globals.DryRun {
 		wsRoot, _, _ := workspace.FindRoot(abs)

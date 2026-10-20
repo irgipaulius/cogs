@@ -24,9 +24,18 @@ func peerAllowed(conn net.Conn) bool {
 	}
 	var pid int
 	var credErr error
+	var sameUser bool
 	_ = raw.Control(func(fd uintptr) {
-		pid, credErr = peerPID(int(fd))
+		nfd := int(fd)
+		if peerSameUser(nfd) {
+			sameUser = true
+			return
+		}
+		pid, credErr = peerPID(nfd)
 	})
+	if sameUser {
+		return true
+	}
 	if credErr != nil || pid <= 0 {
 		return false
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func tunnelRunDir(projectDir string) string {
@@ -49,6 +50,9 @@ func startTunnelBackground(projectDir, name string) error {
 	if pid, running := tunnelRunning(projectDir, name); running {
 		fmt.Printf("Tunnel %q already running (pid %d)\n", name, pid)
 		return nil
+	}
+	if holder, pid, held := tunnelHeldByOtherApp(projectDir, name); held {
+		return fmt.Errorf("tunnel %q is already connected by app %q (pid %d) — each app needs its own tunnel_name in cogs.launch.json", name, holder, pid)
 	}
 	if err := os.MkdirAll(tunnelRunDir(projectDir), 0o755); err != nil {
 		return err
@@ -110,6 +114,32 @@ func stopTunnel(projectDir, name string) error {
 	_ = os.Remove(tunnelPIDPath(projectDir, name))
 	fmt.Printf("Stopped tunnel %q (pid %d)\n", name, pid)
 	return nil
+}
+
+func tunnelHeldByOtherApp(projectDir, name string) (holder string, pid int, held bool) {
+	root, ws, err := workspace.FindRoot(projectDir)
+	if err != nil || name == "" {
+		return "", 0, false
+	}
+	abs, err := filepath.Abs(projectDir)
+	if err != nil {
+		return "", 0, false
+	}
+	for _, a := range ws.Apps {
+		dir := filepath.Join(root, a.Path)
+		other, err := filepath.Abs(dir)
+		if err != nil || other == abs {
+			continue
+		}
+		m, err := launch.Load(dir)
+		if err != nil || m.TunnelName != name {
+			continue
+		}
+		if p, running := tunnelRunning(dir, name); running {
+			return a.Name, p, true
+		}
+	}
+	return "", 0, false
 }
 
 func tunnelRunning(projectDir, name string) (int, bool) {

@@ -34,8 +34,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(s.SocketPath), 0o750); err != nil {
 		return err
 	}
-	_ = os.Remove(s.SocketPath)
-	ln, err := net.Listen("unix", s.SocketPath)
+	ln, err := listenUnix(s.SocketPath)
 	if err != nil {
 		return err
 	}
@@ -63,6 +62,19 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		go s.handleConn(conn)
 	}
+}
+
+// listenUnix removes a leftover socket file from a crashed supervisor, then binds.
+func listenUnix(path string) (net.Listener, error) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	ln, err := net.Listen("unix", path)
+	if err == nil {
+		return ln, nil
+	}
+	_ = os.Remove(path)
+	return net.Listen("unix", path)
 }
 
 func (s *Server) handleConn(conn net.Conn) {

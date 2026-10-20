@@ -11,24 +11,38 @@ import (
 )
 
 func cmdDeploy(args []string) error {
-	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
-	target := fs.String("target", "", "GOOS/GOARCH for cross-build (remote SSH deploy)")
-	service := fs.String("service", "systemd", "service kind")
-	rollback := fs.Bool("rollback", false, "roll back to .prev binary")
-	remote := fs.Bool("remote", false, "force SSH deploy (requires user@host)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	rest := fs.Args()
-
-	if len(rest) >= 1 && (strings.Contains(rest[0], "@") || *remote) {
-		return cmdDeployRemote(rest, deployRemoteOpts{
+	// Workspace flags (--ping, --app, …) are not on the remote FlagSet.
+	// Parsing them there makes `cogs deploy --ping` fail unless the user inserts `--`.
+	if wantsRemoteDeploy(args) {
+		fs := flag.NewFlagSet("deploy", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		target := fs.String("target", "", "GOOS/GOARCH for cross-build (remote SSH deploy)")
+		service := fs.String("service", "systemd", "service kind")
+		rollback := fs.Bool("rollback", false, "roll back to .prev binary")
+		_ = fs.Bool("remote", false, "force SSH deploy (requires user@host)")
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		return cmdDeployRemote(fs.Args(), deployRemoteOpts{
 			target:   *target,
 			service:  *service,
 			rollback: *rollback,
 		})
 	}
-	return cmdDeployWorkspace(rest)
+	return cmdDeployWorkspace(args)
+}
+
+func wantsRemoteDeploy(args []string) bool {
+	for _, a := range args {
+		switch a {
+		case "--remote", "--rollback":
+			return true
+		}
+		if !strings.HasPrefix(a, "-") && strings.Contains(a, "@") {
+			return true
+		}
+	}
+	return false
 }
 
 type deployRemoteOpts struct {

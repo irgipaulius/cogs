@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,9 +22,11 @@ func supervisorPIDPath(wsRoot string) string {
 
 func startSupervisorBackground(wsRoot string) error {
 	sock := filepath.Join(wsRoot, ".cogs", "supervisor.sock")
-	if _, err := os.Stat(sock); err == nil {
+	if supervisorSocketLive(sock) {
 		return nil
 	}
+	// Crash leaves the socket file behind; a live dial is the only "already running" signal.
+	_ = os.Remove(sock)
 	if err := os.MkdirAll(supervisorRunDir(wsRoot), 0o755); err != nil {
 		return err
 	}
@@ -56,4 +59,13 @@ func startSupervisorBackground(wsRoot string) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return nil
+}
+
+func supervisorSocketLive(sock string) bool {
+	conn, err := net.DialTimeout("unix", sock, 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }

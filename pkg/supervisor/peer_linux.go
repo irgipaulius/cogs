@@ -11,3 +11,5 @@ func peerPID(fd int) (int, error) {
 	}
 	return int(ucred.Pid), nil
 }
+
+func peerSameUser(fd int) bool { return false }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
+	"github.com/irgipaulius/cogs/pkg/launch"
 )
 
 func appRunDir(projectDir string) string {
@@ -66,7 +67,11 @@ func startAppBackground(projectDir string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "run", "./cmd/app", "serve", "-env", ".env")
+	cmd, err := appServeCmd(projectDir)
+	if err != nil {
+		logFile.Close()
+		return err
+	}
 	cmd.Dir = projectDir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
@@ -82,4 +87,50 @@ func startAppBackground(projectDir string) error {
 	}
 	ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API started pid %d (%s)", cmd.Process.Pid, logPath))
 	return nil
+}
+
+// appServeCmd builds a stable binary and serves it. go run recompiles on every
+// start and lands in a temp dir, which fails the supervisor path check.
+func appServeCmd(projectDir string) (*exec.Cmd, error) {
+	bin, err := buildAppBinary(projectDir)
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(bin, "serve", "-env", ".env"), nil
+}
+
+func appBinaryPath(projectDir string) string {
+	name := "cogs-app"
+	if m, err := launch.Load(projectDir); err == nil && m.IsCombined() {
+		name = "cogs-admin"
+	}
+	return filepath.Join(appRunDir(projectDir), name)
+}
+
+func buildAppBinary(projectDir string) (string, error) {
+	out := appBinaryPath(projectDir)
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return "", err
+	}
+	cmd := exec.Command("go", "build", "-o", out, "./cmd/app")
+	cmd.Dir = projectDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("build app: %w", err)
+	}
+	return out, nil
+}
+
+func runAppBinary(projectDir string, args ...string) error {
+	bin, err := buildAppBinary(projectDir)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Dir = projectDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
 }
