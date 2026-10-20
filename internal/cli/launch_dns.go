@@ -19,3 +19,11 @@ func configurePublicHosts(projectDir string, m launch.Manifest, pageHost, apiHos
 	}
 	return nil
 }
+
+func configureCombinedHost(projectDir string, m launch.Manifest, host string) error {
+	localSvc := "http://" + listenAddr(m.BindHost, m.Port)
+	if err := ensureTunnelIngress(projectDir, m.TunnelName, host, localSvc); err != nil {
+		return fmt.Errorf("tunnel ingress: %w", err)
+	}
+	return ensureTunnelDNS(projectDir, m.TunnelName, host)
+}

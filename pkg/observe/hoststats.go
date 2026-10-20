@@ -16,6 +16,11 @@ type HostSnapshot struct {
 	RSSMB      float64 `json:"process_rss_mb"`
 }
 
+// SnapshotHost returns current host CPU/RAM for dashboards.
+func SnapshotHost() HostSnapshot {
+	return hostSnapshot()
+}
+
 func hostSnapshot() HostSnapshot {
 	var out HostSnapshot
 	if p, err := cpu.Percent(0, false); err == nil && len(p) > 0 {

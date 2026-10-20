@@ -1,0 +1,13 @@
+{
+  "name": "cogs-admin",
+  "pages_dir": "internal/ui/dist",
+  "page_subdomain": "admin",
+  "api_subdomain": "admin",
+  "bind_host": "127.0.0.1",
+  "port": 18786,
+  "d1_name": "cogs-admin-edge",
+  "r2_bucket": "cogs-admin-images",
+  "tunnel_name": "cogs-admin",
+  "pages_project": "cogs-admin",
+  "max_upload_bytes": 1048576
+}

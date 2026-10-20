@@ -9,6 +9,11 @@
   },
   "apps": [
     {
+      "name": "admin",
+      "path": "apps/admin",
+      "description": "Public admin dashboard (combined SPA + API, RBAC, supervisor)"
+    },
+    {
       "name": "todo",
       "path": "apps/todo",
       "description": "Reference Cloudflare todo app (Pages UI + tunnel API + SQLite)"

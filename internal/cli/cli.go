@@ -43,6 +43,10 @@ func Run(args []string) error {
 		return cmdDoctor(args[1:])
 	case "cf":
 		return cmdCF(args[1:])
+	case "admin":
+		return cmdAdmin(args[1:])
+	case "supervisor":
+		return cmdSupervisor(args[1:])
 	case "apps":
 		return cmdApps(args[1:])
 	case "workspace":
@@ -86,6 +90,8 @@ Usage:
   cogs sync [--delete] | cogs sync --checksum | cogs sync --rebuild
   cogs deps --target os/arch
   cogs restore-test <backup.db>
+  cogs admin init|check           public dashboard bootstrap
+  cogs supervisor run             control plane (unix socket)
   cogs doctor [-env .env]
   cogs cf whoami | r2 | d1 | pages | worker | kv ...
   cogs version

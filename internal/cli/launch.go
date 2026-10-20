@@ -14,6 +14,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func cmdLaunch(args []string) error {
@@ -65,9 +66,16 @@ func runLaunch(flags launchFlags) error {
 		}
 		pageHost = m.PageSubdomain + "." + domain
 		apiHost = m.APISubdomain + "." + domain
+		if m.IsCombined() {
+			apiHost = pageHost
+		}
 		fmt.Println("\nPlanned hostnames:")
-		fmt.Println("  UI :", pageHost)
-		fmt.Println("  API:", apiHost)
+		if m.IsCombined() {
+			fmt.Println("  Admin:", pageHost)
+		} else {
+			fmt.Println("  UI :", pageHost)
+			fmt.Println("  API:", apiHost)
+		}
 	}
 
 	if flags.quick {
@@ -86,6 +94,16 @@ func runLaunch(flags launchFlags) error {
 		}
 	}
 
+	if m.IsCombined() {
+		if err := ensureAdminInitialized(abs); err != nil {
+			return err
+		}
+		wsRoot, _, err := workspace.FindRoot(abs)
+		if err == nil {
+			_ = startSupervisorBackground(wsRoot)
+		}
+	}
+
 	if globals.DryRun {
 		ux.Plan("launch dry-run", []string{
 			"listen: " + listenAddr(m.BindHost, m.Port),
@@ -96,11 +114,17 @@ func runLaunch(flags launchFlags) error {
 		return nil
 	}
 
-	if err := ensureEnv(envPath, m, pageHost, apiHost); err != nil {
+	if m.IsCombined() {
+		if err := ensureAdminEnv(envPath, m, pageHost); err != nil {
+			return err
+		}
+	} else if err := ensureEnv(envPath, m, pageHost, apiHost); err != nil {
 		return err
 	}
-	if err := ensureBlobStorage(abs); err != nil {
-		return err
+	if !m.IsCombined() {
+		if err := ensureBlobStorage(abs); err != nil {
+			return err
+		}
 	}
 
 	if !flags.quick && needsPublicHostnames(flags.skipPages, flags.skipTunnel) {
@@ -109,13 +133,15 @@ func runLaunch(flags launchFlags) error {
 		}
 	}
 
-	if !flags.quick {
+	if !flags.quick && !m.IsCombined() {
 		fmt.Println("\n→ Cloudflare D1 (edge read replica)")
 		_ = wranglerTryCreate("d1", "create", m.D1Name)
 
 		fmt.Println("→ R2 bucket (optional — edge sync via cogs sync; attachments use local COGS_BLOB_DIR by default)")
 		_ = wranglerTryCreate("r2", "bucket", "create", m.R2Bucket)
+	}
 
+	if !flags.quick {
 		if !flags.skipTunnel {
 			fmt.Println("→ Tunnel (create + ingress + API DNS)")
 			_ = wranglerTryCreate("tunnel", "create", m.TunnelName)
@@ -128,7 +154,7 @@ func runLaunch(flags launchFlags) error {
 		}
 	}
 
-	if !flags.skipPages {
+	if !flags.skipPages && !m.IsCombined() {
 		fmt.Println("→ Pages deploy")
 		if !flags.quick {
 			_ = wranglerTryCreate("pages", "project", "create", m.PagesProject, "--production-branch=main")
@@ -144,9 +170,16 @@ func runLaunch(flags launchFlags) error {
 	}
 
 	if !flags.quick && needsPublicHostnames(flags.skipPages, flags.skipTunnel) {
-		fmt.Println("→ Custom hostnames (tunnel ingress + DNS CNAMEs + Pages domain)")
-		if err := configurePublicHosts(abs, m, pageHost, apiHost); err != nil {
-			return fmt.Errorf("public hostnames: %w\nRe-run after fixing DNS, or: cogs tunnel fix --dir %s", err, abs)
+		if m.IsCombined() {
+			fmt.Println("→ Admin hostname (tunnel ingress + DNS)")
+			if err := configureCombinedHost(abs, m, pageHost); err != nil {
+				return fmt.Errorf("admin hostname: %w", err)
+			}
+		} else {
+			fmt.Println("→ Custom hostnames (tunnel ingress + DNS CNAMEs + Pages domain)")
+			if err := configurePublicHosts(abs, m, pageHost, apiHost); err != nil {
+				return fmt.Errorf("public hostnames: %w\nRe-run after fixing DNS, or: cogs tunnel fix --dir %s", err, abs)
+			}
 		}
 	}
 
@@ -156,7 +189,11 @@ func runLaunch(flags launchFlags) error {
 			return err
 		}
 	}
-	if err := runGo(abs, "run", "./cmd/app", "migrate", "-env", ".env"); err != nil {
+	if m.IsCombined() {
+		if err := ensureAdminInitialized(abs); err != nil {
+			return err
+		}
+	} else if err := runGo(abs, "run", "./cmd/app", "migrate", "-env", ".env"); err != nil {
 		return err
 	}
 

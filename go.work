@@ -4,5 +4,6 @@ toolchain go1.23.3
 
 use (
 	.
+	./apps/admin
 	./apps/todo
 )

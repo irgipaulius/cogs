@@ -48,6 +48,9 @@ type App struct {
 	S3AccessKeyID     string
 	S3SecretAccessKey string
 	S3PathStyle       bool
+	WorkspaceRoot     string
+	AdminDBPath       string
+	SupervisorSocket  string
 }
 
 // Load reads env from os.Environ, optionally overlaying a dotenv file.
@@ -147,6 +150,9 @@ func parse(vars map[string]string) (App, error) {
 		S3AccessKeyID:     firstNonEmpty(get("COGS_S3_ACCESS_KEY_ID"), get("COGS_R2_ACCESS_KEY_ID")),
 		S3SecretAccessKey: firstNonEmpty(get("COGS_S3_SECRET_ACCESS_KEY"), get("COGS_R2_SECRET_ACCESS_KEY")),
 		S3PathStyle:       truthy(get("COGS_S3_PATH_STYLE")) || get("COGS_BLOB_STORE") == "minio" || get("COGS_BLOB_STORE") == "s3",
+		WorkspaceRoot:     get("COGS_WORKSPACE_ROOT"),
+		AdminDBPath:       get("COGS_ADMIN_DB_PATH"),
+		SupervisorSocket:  get("COGS_SUPERVISOR_SOCKET"),
 	}
 
 	var missing []string
@@ -177,7 +183,7 @@ func LoadRelaxed(envFile string) (App, error) {
 		}
 	}
 	if envFile != "" {
-		if err := overlayFile(envFile, vars); err != nil {
+		if err := overlayFileOptional(envFile, vars); err != nil {
 			return App{}, err
 		}
 	}
@@ -197,6 +203,10 @@ func LoadRelaxed(envFile string) (App, error) {
 		PublicAPIURL:      get("COGS_PUBLIC_API_URL"),
 		BlobStore:         firstNonEmpty(get("COGS_BLOB_STORE"), "fs"),
 		BlobDir:           firstNonEmpty(get("COGS_BLOB_DIR"), "data/blobs"),
+		PublicPageOrigin:  get("COGS_PUBLIC_PAGE_ORIGIN"),
+		WorkspaceRoot:     get("COGS_WORKSPACE_ROOT"),
+		AdminDBPath:       get("COGS_ADMIN_DB_PATH"),
+		SupervisorSocket:  get("COGS_SUPERVISOR_SOCKET"),
 	}, nil
 }
 

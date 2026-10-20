@@ -22,6 +22,13 @@ type Manifest struct {
 	TunnelName     string `json:"tunnel_name"`
 	PagesProject   string `json:"pages_project"`
 	MaxUploadBytes int64  `json:"max_upload_bytes"`
+	// Kind "combined" = one public hostname serves embedded SPA + API (admin dashboard).
+	Kind string `json:"kind,omitempty"`
+}
+
+// IsCombined is true for apps like admin (no separate Pages project).
+func (m Manifest) IsCombined() bool {
+	return m.Kind == "combined"
 }
 
 // Load reads cogs.launch.json from dir.

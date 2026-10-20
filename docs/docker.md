@@ -4,7 +4,22 @@ CoGS defaults to **native deploy**: `./cogs launch`, `cogs deploy`, systemd on F
 
 Cloudflare **Pages, Tunnel, and DNS** are still provisioned with the **`cogs` CLI** on a machine where you can run Wrangler (laptop, CI, or admin box). The container runs **migrate + serve** only.
 
-## Todo app
+## Workspace stack (todo + admin)
+
+From the **repo root**, run todo and the public admin dashboard together:
+
+```bash
+cp .env.docker.example .env.docker   # optional; defaults include admin login
+docker compose up --build -d
+```
+
+- **Admin UI**: http://127.0.0.1:18786 — default login `admin` / `CogsAdmin-Docker-2026!` (change in `.env.docker`).
+- **Todo API**: http://127.0.0.1:18787/health
+- Admin container mounts the repo at `/workspace`, runs **supervisor** + **admin** (socket under `/tmp` in Docker).
+
+Stop the older single-app compose if port 18787 is busy: `docker compose -f apps/todo/docker-compose.yml down`.
+
+## Todo app (API only)
 
 From the **repo root**:
 

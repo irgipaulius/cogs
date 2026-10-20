@@ -1,0 +1,102 @@
+# CoGS workspace stack: todo API + MinIO + admin dashboard + supervisor.
+# From repo root: docker compose up --build -d
+#
+# Admin UI: http://127.0.0.1:18786  (login from .env.docker)
+# Todo API: http://127.0.0.1:18787/health
+
+services:
+  minio:
+    image: minio/minio:latest
+    pull_policy: if_not_present
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cogsminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cogsminio-dev-change-me}
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    pull_policy: if_not_present
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cogsminio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cogsminio-dev-change-me}
+      MINIO_BUCKET: ${MINIO_BUCKET:-cogs-todo-blobs}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        sleep 4
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb -p "local/$$MINIO_BUCKET" || true
+
+  todo-api:
+    build:
+      context: .
+      dockerfile: apps/todo/Dockerfile
+    image: cogs-todo:local
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "${COGS_TODO_PORT:-18787}:18787"
+    environment:
+      COGS_LISTEN: 0.0.0.0:18787
+      COGS_ALLOW_PUBLIC_BIND: "1"
+      COGS_DB_PATH: /data/todo.db
+      COGS_BLOB_STORE: minio
+      COGS_S3_ENDPOINT: http://minio:9000
+      COGS_S3_BUCKET: ${MINIO_BUCKET:-cogs-todo-blobs}
+      COGS_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-cogsminio}
+      COGS_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-cogsminio-dev-change-me}
+      COGS_S3_PATH_STYLE: "true"
+      COGS_MAX_UPLOAD_BYTES: ${COGS_MAX_UPLOAD_BYTES:-104857600}
+      COGS_OBS: "off"
+      COGS_SESSION_SECRET: ${COGS_SESSION_SECRET:-docker-dev-change-me}
+      COGS_PUBLIC_PAGE_ORIGIN: ${COGS_PUBLIC_PAGE_ORIGIN:-http://127.0.0.1:8788}
+      COGS_PUBLIC_API_URL: ${COGS_PUBLIC_API_URL:-http://127.0.0.1:18787}
+    volumes:
+      - ./apps/todo/data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18787/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    image: cogs-admin:local
+    ports:
+      - "${COGS_ADMIN_PORT:-18786}:18786"
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      COGS_ADMIN_USER: ${COGS_ADMIN_USER:-admin}
+      COGS_ADMIN_PASSWORD: ${COGS_ADMIN_PASSWORD:-CogsAdmin-Docker-2026!}
+      COGS_WORKSPACE_ROOT: /workspace
+      COGS_ADMIN_DB_PATH: /workspace/apps/admin/data/admin.db
+      COGS_LISTEN: 0.0.0.0:18786
+      COGS_ALLOW_PUBLIC_BIND: "1"
+      COGS_ADMIN_DEV: "1"
+      COGS_PUBLIC_PAGE_ORIGIN: http://127.0.0.1:18786
+      COGS_PUBLIC_API_URL: http://127.0.0.1:18786
+      COGS_SUPERVISOR_SOCKET: /tmp/cogs-supervisor.sock
+    volumes:
+      - .:/workspace
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18786/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 25s
+    restart: unless-stopped
+
+volumes:
+  minio-data:

@@ -1,4 +1,5 @@
 /dist/
+/cogs
 .wrangler/
 .cogs/
 *.db
