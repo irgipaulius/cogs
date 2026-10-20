@@ -10,6 +10,7 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/accessjwt"
 	"github.com/irgipaulius/cogs/pkg/config"
+	"github.com/irgipaulius/cogs/pkg/ingress"
 	"github.com/irgipaulius/cogs/pkg/linkperf"
 	"github.com/irgipaulius/cogs/pkg/limiter"
 	"github.com/irgipaulius/cogs/pkg/observe"
@@ -28,12 +29,20 @@ type Deps struct {
 	Metrics       http.Handler
 	PrivateOnly   bool
 	Observe       *observe.Runtime
+	Ingress       *ingress.Config
 	RegisterRoutes func(mux *http.ServeMux)
 }
 
 // NewMux returns the application handler chain.
 func NewMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /.well-known/cogs-runner", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"runner_id":  d.Config.RunnerID,
+			"claimed_at": d.Config.RunnerClaimedAt,
+		})
+	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -89,6 +98,9 @@ func NewMux(d Deps) http.Handler {
 	}
 	if d.PrivateOnly && d.Config.PrivateToken != "" {
 		h = privateTokenMiddleware(d.Config.PrivateToken)(h)
+	}
+	if d.Ingress != nil {
+		h = ingress.Middleware(d.Ingress, h)
 	}
 	return h
 }

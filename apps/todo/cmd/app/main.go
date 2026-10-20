@@ -19,6 +19,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/cors"
 	"github.com/irgipaulius/cogs/pkg/limiter"
 	"github.com/irgipaulius/cogs/pkg/observe"
+	"github.com/irgipaulius/cogs/pkg/blobstore"
 	"github.com/irgipaulius/cogs/pkg/r2"
 	"github.com/irgipaulius/cogs/pkg/server"
 	"github.com/irgipaulius/cogs/pkg/session"
@@ -116,13 +117,22 @@ func serve(ctx context.Context, envFile string) error {
 			r2c = nil
 		}
 	}
+	blobs, err := blobstore.New(ctx, cfg, r2c)
+	if err != nil {
+		return fmt.Errorf("blob store: %w", err)
+	}
+	if cfg.BlobStore == "fs" || cfg.BlobStore == "" {
+		if err := os.MkdirAll(cfg.BlobDir, 0o750); err != nil {
+			return err
+		}
+	}
 
 	dbWriter := observe.InstrumentDB(pools.Writer, obs.SQL)
 	api := &todo.API{
 		Store:     &todo.Store{DB: dbWriter},
-		R2:        r2c,
+		Blobs:     blobs,
 		MaxUpload: cfg.MaxUploadBytes,
-		R2Prefix:  "todo-images",
+		KeyPrefix: "todo-images",
 	}
 
 	origins := []string{"http://127.0.0.1:8788", "http://localhost:8788"}
@@ -147,8 +157,8 @@ func serve(ctx context.Context, envFile string) error {
 		Addr:              cfg.ListenAddr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       5 * time.Minute,
-		WriteTimeout:      5 * time.Minute,
+		ReadTimeout:       30 * time.Minute,
+		WriteTimeout:      30 * time.Minute,
 	}
 
 	sig := make(chan os.Signal, 1)

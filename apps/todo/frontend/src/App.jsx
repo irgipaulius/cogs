@@ -180,7 +180,7 @@ export default function App() {
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
-      setStatus({ msg: "Attachment stored (R2 + SQLite)", ok: true });
+      setStatus({ msg: "Attachment stored on host", ok: true });
       await syncFromServer();
     } catch (err) {
       setStatus({ msg: "Upload failed: " + err.message, ok: false });

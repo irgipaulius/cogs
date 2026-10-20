@@ -19,16 +19,17 @@ docker run --rm -p 18787:18787 \
 curl -sS http://127.0.0.1:18787/health
 ```
 
-Or **Compose** (from `apps/todo/`):
+Or **Compose** (from `apps/todo/`) — includes **MinIO** for attachments on the host stack:
 
 ```bash
-cp .env.docker.example .env.docker   # edit secrets
+cp .env.docker.example .env.docker   # optional overrides
 docker compose -f docker-compose.yml up --build
 ```
 
-- **Port**: `18787` inside the container (`COGS_LISTEN=0.0.0.0:18787`). Map with `COGS_HOST_PORT` in compose.
-- **Data**: SQLite at `/data/todo.db` (named volume `todo-data`).
-- **Config**: environment variables and/or `.env.docker` mounted as `/config/.env` if you add that bind in compose.
+- **Port**: `18787` API, `9000` MinIO S3 API, `9001` MinIO console.
+- **SQLite**: `./data/todo.db` bind mount.
+- **Blobs**: `COGS_BLOB_STORE=minio` → `http://minio:9000` bucket `cogs-todo-blobs` (not Cloudflare R2).
+- **Large files**: compose sets `COGS_MAX_UPLOAD_BYTES=104857600` (100 MiB). For a **99 MiB** test, upload via **`http://127.0.0.1:18787`** (direct to Docker). The **tunnel hostname** may reject bodies near Cloudflare’s ~100 MiB limit even when the app allows more.
 
 ## Tunnel with Docker
 

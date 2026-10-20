@@ -25,6 +25,7 @@ type deployLocalOpts struct {
 	skipUIBuild bool
 	noTunnelBG  bool
 	serveBG     bool
+	leaseWatch bool
 }
 
 func cmdDeployWorkspace(args []string) error {
@@ -76,7 +77,8 @@ func cmdDeployWorkspace(args []string) error {
 			noTunnelBG:  opts.noTunnelBG,
 			yes:         opts.yes,
 			skipUIBuild: opts.skipUIBuild,
-			quick:       opts.quick,
+			quick:      opts.quick,
+			leaseWatch: opts.leaseWatch,
 		}
 		lf.serveMode = serveBackground
 		if !opts.serveBG {
@@ -123,10 +125,11 @@ func cmdDeployWorkspace(args []string) error {
 
 func parseDeployLocalFlags(args []string) (deployLocalOpts, error) {
 	o := deployLocalOpts{
-		quick:    true,
-		yes:      true,
-		serveBG:  true,
-		parallel: true,
+		quick:      true,
+		yes:        true,
+		serveBG:    true,
+		parallel:   true,
+		leaseWatch: true,
 	}
 	var apps []string
 	for i := 0; i < len(args); i++ {
@@ -154,6 +157,8 @@ func parseDeployLocalFlags(args []string) (deployLocalOpts, error) {
 			o.noTunnelBG = true
 		case "--foreground-serve":
 			o.serveBG = false
+		case "--no-lease-watch":
+			o.leaseWatch = false
 		case "--app":
 			if i+1 >= len(args) {
 				return o, fmt.Errorf("--app requires a name")

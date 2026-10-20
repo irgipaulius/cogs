@@ -23,6 +23,14 @@ func cmdDoctor(args []string) error {
 		fmt.Println("config: ok (relaxed)")
 		fmt.Println("  listen:", cfg.ListenAddr)
 		fmt.Println("  db:", cfg.DBPath)
+		fmt.Println("  blobs:", cfg.BlobStore, cfg.BlobDir)
+	}
+	if cfg.BlobStore == "fs" && cfg.BlobDir != "" {
+		if err := os.MkdirAll(cfg.BlobDir, 0o750); err != nil {
+			fmt.Println("blob dir:", err)
+		} else {
+			fmt.Println("blob dir: writable", cfg.BlobDir)
+		}
 	}
 	if _, err := os.Stat(cfg.DBPath); err == nil {
 		p, err := sqliteopen.Open(sqliteopen.Config{Path: cfg.DBPath})

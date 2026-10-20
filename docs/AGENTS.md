@@ -123,7 +123,7 @@ Goal: same git repo on server, **linux/arm64** or **linux/amd64** binary, system
 1. On server: clone repo, install Go or use `cogs build --target linux/arm64` from dev machine and copy binary.
 2. Copy app `.env` securely (contains secrets); never commit `.env`.
 3. `cd apps/todo && /path/to/cogs migrate -env .env` then `serve` under systemd (see `cogs service render systemd`).
-4. **Tunnel handoff:** stop tunnel on old host (`cogs tunnel stop`), run tunnel on server (`cogs tunnel start --dir apps/todo`). DNS CNAMEs usually unchanged.
+4. **Tunnel handoff (automatic):** prod runs `cogs deploy` (or `launch`/`redeploy` with tunnel). New machine claims via `COGS_RUNNER_ID` + `/.well-known/cogs-runner`, Cloudflare API drops old tunnel connectors, then starts local tunnel+API. Other hosts run **lease watch** (auto on deploy) and **yield** when they see a newer claim. Separate prod DB: `migrate` on prod only.
 5. Verify: `curl -sS https://todo-api.<zone>/health`, Pages UI loads, admin only on loopback.
 
 If SSH details are unknown, **stop and ask the user** for host, user, arch, and whether cloudflared should move off the Mac.
@@ -164,6 +164,7 @@ If SSH details are unknown, **stop and ask the user** for host, user, arch, and 
 | [quickstart.md](quickstart.md) | Humans, first run |
 | [cloudflare-setup.md](cloudflare-setup.md) | CF dashboard + tokens |
 | [observe.md](observe.md) | COGS_OBS, admin hub |
+| [ingress.md](ingress.md) | tunnel-first vs per-route direct |
 | [install.md](install.md) | curl \| sh vs clone |
 
 When updating behavior, **update this playbook** in the same PR as CLI changes.

@@ -37,6 +37,17 @@ type App struct {
 	ObsLogPath        string
 	LinkPerf          bool
 	LinkPerfMaxBytes  int64
+	RunnerID          string
+	RunnerClaimedAt   string
+	LeaseWatch        bool
+	BlobStore         string
+	BlobDir           string
+	S3Endpoint        string
+	S3Region          string
+	S3Bucket          string
+	S3AccessKeyID     string
+	S3SecretAccessKey string
+	S3PathStyle       bool
 }
 
 // Load reads env from os.Environ, optionally overlaying a dotenv file.
@@ -125,6 +136,17 @@ func parse(vars map[string]string) (App, error) {
 		ObsLogPath:        get("COGS_OBS_LOG"),
 		LinkPerf:          !truthy(get("COGS_LINKPERF_OFF")),
 		LinkPerfMaxBytes:  int64Env(get, "COGS_LINKPERF_MAX_BYTES", 512<<10),
+		RunnerID:          get("COGS_RUNNER_ID"),
+		RunnerClaimedAt:   get("COGS_RUNNER_CLAIMED_AT"),
+		LeaseWatch:        !truthy(get("COGS_LEASE_WATCH_OFF")),
+		BlobStore:         firstNonEmpty(get("COGS_BLOB_STORE"), "fs"),
+		BlobDir:           firstNonEmpty(get("COGS_BLOB_DIR"), "data/blobs"),
+		S3Endpoint:        get("COGS_S3_ENDPOINT"),
+		S3Region:          firstNonEmpty(get("COGS_S3_REGION"), "auto"),
+		S3Bucket:          firstNonEmpty(get("COGS_S3_BUCKET"), get("COGS_R2_BUCKET")),
+		S3AccessKeyID:     firstNonEmpty(get("COGS_S3_ACCESS_KEY_ID"), get("COGS_R2_ACCESS_KEY_ID")),
+		S3SecretAccessKey: firstNonEmpty(get("COGS_S3_SECRET_ACCESS_KEY"), get("COGS_R2_SECRET_ACCESS_KEY")),
+		S3PathStyle:       truthy(get("COGS_S3_PATH_STYLE")) || get("COGS_BLOB_STORE") == "minio" || get("COGS_BLOB_STORE") == "s3",
 	}
 
 	var missing []string
@@ -172,6 +194,9 @@ func LoadRelaxed(envFile string) (App, error) {
 		D1AccountID:       get("COGS_D1_ACCOUNT_ID"),
 		D1DatabaseID:      get("COGS_D1_DATABASE_ID"),
 		D1APIToken:        get("COGS_D1_API_TOKEN"),
+		PublicAPIURL:      get("COGS_PUBLIC_API_URL"),
+		BlobStore:         firstNonEmpty(get("COGS_BLOB_STORE"), "fs"),
+		BlobDir:           firstNonEmpty(get("COGS_BLOB_DIR"), "data/blobs"),
 	}, nil
 }
 

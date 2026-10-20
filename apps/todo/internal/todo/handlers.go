@@ -8,14 +8,14 @@ import (
 	"path"
 	"strings"
 
-	"github.com/irgipaulius/cogs/pkg/r2"
+	"github.com/irgipaulius/cogs/pkg/blobstore"
 )
 
 type API struct {
-	Store      *Store
-	R2         *r2.Client
-	MaxUpload  int64
-	R2Prefix   string
+	Store     *Store
+	Blobs     blobstore.Store
+	MaxUpload int64
+	KeyPrefix string
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -85,8 +85,8 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
-	if a.R2 == nil {
-		http.Error(w, "R2 not configured", 503)
+	if a.Blobs == nil {
+		http.Error(w, "blob storage not configured", 503)
 		return
 	}
 	id := r.PathValue("id")
@@ -106,9 +106,9 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	key := path.Join(a.R2Prefix, id, hdr.Filename)
+	key := path.Join(a.KeyPrefix, id, hdr.Filename)
 	ct := hdr.Header.Get("Content-Type")
-	if err := a.R2.PutBytes(r.Context(), key, data, ct); err != nil {
+	if err := a.Blobs.Put(r.Context(), key, data, ct); err != nil {
 		http.Error(w, err.Error(), 502)
 		return
 	}
@@ -120,8 +120,8 @@ func (a *API) uploadImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getImage(w http.ResponseWriter, r *http.Request) {
-	if a.R2 == nil {
-		http.Error(w, "R2 not configured", 503)
+	if a.Blobs == nil {
+		http.Error(w, "blob storage not configured", 503)
 		return
 	}
 	id := r.PathValue("id")
@@ -141,7 +141,7 @@ func (a *API) getImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no image", 404)
 		return
 	}
-	data, err := a.R2.GetBytes(r.Context(), key)
+	data, err := a.Blobs.Get(r.Context(), key)
 	if err != nil {
 		http.Error(w, err.Error(), 502)
 		return

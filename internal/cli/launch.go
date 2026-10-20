@@ -75,6 +75,9 @@ func runLaunch(flags launchFlags) error {
 	} else {
 		explainLaunchNetworking(m, pageHost, apiHost)
 	}
+	if !flags.quick {
+		explainBlobStorage(abs)
+	}
 
 	if !flags.yes {
 		ok, err := askYesNo("Continue?", true)
@@ -96,6 +99,9 @@ func runLaunch(flags launchFlags) error {
 	if err := ensureEnv(envPath, m, pageHost, apiHost); err != nil {
 		return err
 	}
+	if err := ensureBlobStorage(abs); err != nil {
+		return err
+	}
 
 	if !flags.quick && needsPublicHostnames(flags.skipPages, flags.skipTunnel) {
 		if err := ensureLaunchDNSPrerequisite(abs, domain); err != nil {
@@ -107,7 +113,7 @@ func runLaunch(flags launchFlags) error {
 		fmt.Println("\n→ Cloudflare D1 (edge read replica)")
 		_ = wranglerTryCreate("d1", "create", m.D1Name)
 
-		fmt.Println("→ R2 bucket (images)")
+		fmt.Println("→ R2 bucket (optional — edge sync via cogs sync; attachments use local COGS_BLOB_DIR by default)")
 		_ = wranglerTryCreate("r2", "bucket", "create", m.R2Bucket)
 
 		if !flags.skipTunnel {
@@ -154,6 +160,12 @@ func runLaunch(flags launchFlags) error {
 		return err
 	}
 
+	if !flags.skipTunnel {
+		if err := applyDeployTakeover(abs, m); err != nil {
+			return err
+		}
+	}
+
 	ux.Title("Running locally")
 	ux.Info("API listen " + listenAddr(m.BindHost, m.Port))
 	if flags.skipTunnel {
@@ -165,23 +177,31 @@ func runLaunch(flags launchFlags) error {
 		fmt.Printf("Public UI: https://%s\n", pageHost)
 	}
 
-	if !flags.skipTunnel && !flags.noTunnelBG {
-		fmt.Println("\n→ Starting Cloudflare tunnel in background (via npx wrangler)…")
-		if err := startTunnelBackground(abs, m.TunnelName); err != nil {
-			fmt.Printf("  warning: %v\n", err)
-			fmt.Printf("  retry: cogs tunnel start %s\n", m.TunnelName)
-		}
-	} else if !flags.skipTunnel {
-		fmt.Printf("\nStart tunnel when ready: cogs tunnel start %s\n", m.TunnelName)
-	}
-
 	switch flags.serveMode {
 	case serveSkip:
 		ux.OK("skipped API serve (--no-serve)")
-		return nil
 	case serveBackground:
-		return startAppBackground(abs)
-	default:
+		if err := startAppBackground(abs); err != nil {
+			return err
+		}
+	}
+
+	if !flags.skipTunnel && !flags.noTunnelBG {
+		ux.Step("Starting Cloudflare tunnel in background (via npx wrangler)…")
+		if err := startTunnelBackground(abs, m.TunnelName); err != nil {
+			ux.Warn(fmt.Sprintf("tunnel: %v — retry: cogs tunnel start %s", err, m.TunnelName))
+		}
+	} else if !flags.skipTunnel {
+		ux.Info(fmt.Sprintf("Start tunnel when ready: cogs tunnel start %s", m.TunnelName))
+	}
+
+	if flags.leaseWatch && !flags.skipTunnel {
+		if err := startLeaseWatchBackground(abs); err != nil {
+			ux.Warn("lease watch: " + err.Error())
+		}
+	}
+
+	if flags.serveMode == serveForeground {
 		ux.Info("Starting server (Ctrl+C stops app; tunnel keeps running unless you cogs tunnel stop)…")
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -191,6 +211,7 @@ func runLaunch(flags launchFlags) error {
 		}()
 		return runGo(abs, "run", "./cmd/app", "serve", "-env", ".env")
 	}
+	return nil
 }
 
 func ensureEnv(path string, m launch.Manifest, pageHost, apiHost string) error {
@@ -203,6 +224,8 @@ func ensureEnv(path string, m launch.Manifest, pageHost, apiHost string) error {
 			"COGS_PUBLIC_PAGE_ORIGIN": "https://" + pageHost,
 			"COGS_PUBLIC_API_URL":     "https://" + apiHost,
 			"COGS_OBS":                "file",
+			"COGS_BLOB_STORE":         "fs",
+			"COGS_BLOB_DIR":           "data/blobs",
 		})
 	}
 	secret, _ := randomHex(32)
@@ -211,9 +234,11 @@ COGS_DB_PATH=data/todo.db
 COGS_SESSION_SECRET=%s
 COGS_PUBLIC_PAGE_ORIGIN=https://%s
 COGS_PUBLIC_API_URL=https://%s
-COGS_R2_BUCKET=%s
+COGS_BLOB_STORE=fs
+COGS_BLOB_DIR=data/blobs
 COGS_MAX_UPLOAD_BYTES=%d
-# Fill after: wrangler r2 credentials / dashboard API token
+# Optional R2 (only if COGS_BLOB_STORE=r2 or cogs sync to edge):
+COGS_R2_BUCKET=%s
 COGS_R2_ACCOUNT_ID=
 COGS_R2_ACCESS_KEY_ID=
 COGS_R2_SECRET_ACCESS_KEY=
@@ -224,7 +249,7 @@ COGS_D1_API_TOKEN=
 COGS_CF_API_TOKEN=
 COGS_OBS=file
 COGS_OBS_LOG=
-`, listenAddr(m.BindHost, m.Port), secret, pageHost, apiHost, m.R2Bucket, m.MaxUploadBytes)
+`, listenAddr(m.BindHost, m.Port), secret, pageHost, apiHost, m.MaxUploadBytes, m.R2Bucket)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}

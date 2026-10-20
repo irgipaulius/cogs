@@ -1,0 +1,15 @@
+{
+  "default_policy": "tunnel_only",
+  "trust_loopback": true,
+  "direct_secret_env": "COGS_DIRECT_ACCESS_KEY",
+  "routes": [
+    {
+      "pattern": "GET /api/hello",
+      "allow_direct": false
+    },
+    {
+      "pattern": "POST /api/bulk/*",
+      "allow_direct": true
+    }
+  ]
+}

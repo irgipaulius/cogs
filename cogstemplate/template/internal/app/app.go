@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/config"
+	"github.com/irgipaulius/cogs/pkg/ingress"
 	"github.com/irgipaulius/cogs/pkg/jobs"
 	"github.com/irgipaulius/cogs/pkg/limiter"
 	"github.com/irgipaulius/cogs/pkg/observe"
@@ -68,6 +69,10 @@ func Serve(ctx context.Context, envFile string) error {
 		Secret:          []byte(cfg.SessionSecret),
 		TurnstileSecret: cfg.TurnstileSecret,
 	}
+	ingressCfg, err := ingress.LoadOptional(ingress.ResolvePath(envFile))
+	if err != nil {
+		return fmt.Errorf("ingress config: %w", err)
+	}
 	mux := server.NewMux(server.Deps{
 		Config:       cfg,
 		DB:           pools.Reader,
@@ -76,6 +81,7 @@ func Serve(ctx context.Context, envFile string) error {
 		MigrationVer: ver,
 		PrivateOnly:  cfg.PrivateToken != "",
 		Observe:      obs,
+		Ingress:      ingressCfg,
 		RegisterRoutes: func(m *http.ServeMux) {
 			registerAppRoutes(m, pools.Reader)
 		},

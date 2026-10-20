@@ -33,3 +33,7 @@ Copy IDs into `.env`. Push data with `cogs sync`, not raw SQL dumps, for increme
 ## Private Worker → origin
 
 See [Workers VPC private API](https://developers.cloudflare.com/workers-vpc/examples/private-api/) and `cogs tunnel private`.
+
+## Direct (bulk) routes alongside tunnel
+
+Tunnel is the default public path. For large uploads that exceed Cloudflare HTTP limits, opt specific routes into **direct** access (port forward + TLS on your side) via **`cogs.ingress.json`** — see [ingress.md](ingress.md). The todo example does not use this; scaffolded `cogs new` apps include a sample file.

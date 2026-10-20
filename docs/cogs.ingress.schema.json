@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CoGS ingress policy",
+  "type": "object",
+  "properties": {
+    "default_policy": { "enum": ["tunnel_only"] },
+    "trust_loopback": { "type": "boolean" },
+    "direct_secret_env": { "type": "string" },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "allow_direct"],
+        "properties": {
+          "pattern": { "type": "string" },
+          "allow_direct": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
