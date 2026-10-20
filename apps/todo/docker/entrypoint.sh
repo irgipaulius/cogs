@@ -7,5 +7,10 @@ if [ ! -f "$ENV_FILE" ]; then
 	: > "$ENV_FILE"
 fi
 
+LOG_DIR="${COGS_LOG_DIR:-/run/cogs}"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/app.log"
+touch "$LOG_FILE"
+
 /usr/local/bin/cogs-todo migrate -env "$ENV_FILE"
-exec /usr/local/bin/cogs-todo serve -env "$ENV_FILE"
+exec /usr/local/bin/cogs-todo serve -env "$ENV_FILE" >>"$LOG_FILE" 2>&1

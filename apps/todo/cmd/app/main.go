@@ -20,6 +20,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/limiter"
 	"github.com/irgipaulius/cogs/pkg/observe"
 	"github.com/irgipaulius/cogs/pkg/blobstore"
+	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/r2"
 	"github.com/irgipaulius/cogs/pkg/server"
 	"github.com/irgipaulius/cogs/pkg/session"
@@ -140,6 +141,8 @@ func serve(ctx context.Context, envFile string) error {
 		origins = append(origins, cfg.PublicPageOrigin)
 	}
 
+	wd, _ := os.Getwd()
+	tel := cockpit.FromConfig(cfg, wd)
 	mux := server.NewMux(server.Deps{
 		Config:       cfg,
 		DB:           pools.Reader,
@@ -147,6 +150,7 @@ func serve(ctx context.Context, envFile string) error {
 		IPLimiter:    limiter.NewLRU(20_000, 30, 60),
 		MigrationVer: ver,
 		Observe:      obs,
+		Cockpit:      tel,
 		RegisterRoutes: func(m *http.ServeMux) {
 			api.Register(m)
 		},

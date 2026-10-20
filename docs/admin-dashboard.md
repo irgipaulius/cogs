@@ -43,6 +43,10 @@ Root bypasses all checks.
 
 The UI sends **database ids** registered from the workspace (each app’s `COGS_DB_PATH`). Raw SQL runs only inside the supervisor executor — not in app handlers.
 
+## DNS / Pages safety (multi-app zones)
+
+CoGS records hostnames it manages in `.cogs/dns-ownership.json` at the workspace root. Before changing a CNAME, **`dnsguard`** blocks the operation if another CoGS app already owns that FQDN with a different target. That protects unrelated Pages apps on the same zone (e.g. `hyperreader.eu`) from being overwritten. Re-deploying the **same** app to the same hostname is allowed.
+
 ## Dev notes
 
 - `go run ./cmd/app serve` with `COGS_ADMIN_DEV=1` relaxes unix peer checks when the binary path is not under `apps/admin`.

@@ -236,6 +236,16 @@ func tunnelFix(projectDir string) error {
 	if err := ensureDNSCapableToken(projectDir, zone); err != nil {
 		return err
 	}
+	if m.IsCombined() {
+		if err := ensureTunnelIngress(projectDir, m.TunnelName, apiHost, localSvc); err != nil {
+			return err
+		}
+		if err := ensureTunnelDNS(projectDir, m.TunnelName, apiHost); err != nil {
+			return err
+		}
+		fmt.Println("Done. Test: curl -s https://" + apiHost + "/health")
+		return nil
+	}
 	if err := ensureTunnelIngress(projectDir, m.TunnelName, apiHost, localSvc); err != nil {
 		return err
 	}
@@ -314,7 +324,11 @@ func ensureTunnelDNS(projectDir, tunnelName, fqdn string) error {
 		return err
 	}
 	target := tunnelID + ".cfargotunnel.com"
-	if err := ensureCNAMERecord(dnsToken, zoneID, fqdn, target); err != nil {
+	appName := filepath.Base(projectDir)
+	if m, err := launch.Load(projectDir); err == nil && m.Name != "" {
+		appName = m.Name
+	}
+	if err := ensureCNAMERecordCoGS(projectDir, appName, "tunnel", fqdn, target, dnsToken, zoneID); err != nil {
 		printManualDNS(fqdn, target)
 		return fmt.Errorf("%w — create a Cloudflare API token with Zone.DNS Edit for this zone, set COGS_CF_API_TOKEN in .env, or add the CNAME manually", err)
 	}

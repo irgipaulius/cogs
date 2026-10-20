@@ -12,6 +12,7 @@ type Request struct {
 	DBID    string          `json:"db_id,omitempty"`
 	SQL     string          `json:"sql,omitempty"`
 	Write   bool            `json:"write,omitempty"`
+	LogKind string          `json:"log_kind,omitempty"`
 	Raw     json.RawMessage `json:"raw,omitempty"`
 }
 

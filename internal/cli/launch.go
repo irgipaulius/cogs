@@ -248,6 +248,14 @@ func runLaunch(flags launchFlags) error {
 		}()
 		return runGo(abs, "run", "./cmd/app", "serve", "-env", ".env")
 	}
+	if !globals.DryRun {
+		wsRoot, _, _ := workspace.FindRoot(abs)
+		action := "launch"
+		if flags.quick {
+			action = "redeploy"
+		}
+		recordLaunchDeploy(wsRoot, abs, action, m, pageHost, apiHost)
+	}
 	return nil
 }
 

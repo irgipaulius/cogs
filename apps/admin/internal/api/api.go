@@ -30,6 +30,9 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("GET /api/me", s.auth(s.handleMe))
 	mux.HandleFunc("GET /api/metrics/latest", s.auth(s.handleMetricsLatest))
 	mux.HandleFunc("GET /api/metrics/stream", s.auth(s.handleMetricsStream))
+	mux.HandleFunc("GET /api/cockpit", s.auth(s.handleCockpit))
+	mux.HandleFunc("GET /api/apps/{name}/logs", s.auth(s.handleAppLogs))
+	mux.HandleFunc("GET /api/apps/{name}/telemetry", s.auth(s.handleAppTelemetry))
 	mux.HandleFunc("GET /api/registry", s.auth(s.handleRegistry))
 	mux.HandleFunc("GET /api/sql/tables", s.auth(s.handleSQLTables))
 	mux.HandleFunc("POST /api/sql", s.auth(s.handleSQL))
@@ -126,6 +129,11 @@ func (s *Server) handleMetricsStream(w http.ResponseWriter, r *http.Request, use
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	sid := sessionFromRequest(r)
+	resp, err := s.supCall(supervisor.Request{Op: "cockpit", Session: sid})
+	if err == nil && resp.OK {
+		fmt.Fprintf(w, "event: history\ndata: %s\n\n", string(resp.Data))
+		fl.Flush()
+	}
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
@@ -137,10 +145,50 @@ func (s *Server) handleMetricsStream(w http.ResponseWriter, r *http.Request, use
 			if err != nil || !resp.OK {
 				continue
 			}
-			fmt.Fprintf(w, "data: %s\n\n", string(resp.Data))
+			fmt.Fprintf(w, "event: tick\ndata: %s\n\n", string(resp.Data))
 			fl.Flush()
 		}
 	}
+}
+
+func (s *Server) handleCockpit(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	resp, err := s.supCall(supervisor.Request{Op: "cockpit", Session: sessionFromRequest(r)})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	app := r.PathValue("name")
+	kind := r.URL.Query().Get("kind")
+	if kind == "" {
+		kind = "process"
+	}
+	resp, err := s.supCall(supervisor.Request{
+		Op: "logs", Session: sessionFromRequest(r), App: app, LogKind: kind,
+	})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleAppTelemetry(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	app := r.PathValue("name")
+	resp, err := s.supCall(supervisor.Request{
+		Op: "telemetry", Session: sessionFromRequest(r), App: app,
+	})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
 }
 
 func (s *Server) handleRegistry(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {

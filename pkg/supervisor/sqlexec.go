@@ -38,8 +38,8 @@ func RunSQL(ctx context.Context, reg Registry, dbID, statement string, write boo
 	}
 	upper := strings.ToUpper(stmt)
 	if !write {
-		if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "PRAGMA") && !strings.HasPrefix(upper, "EXPLAIN") {
-			return SQLResult{}, fmt.Errorf("read-only: use SELECT, PRAGMA, or EXPLAIN")
+		if !isReadOnlySQL(upper) {
+			return SQLResult{}, fmt.Errorf("read-only: use SELECT, WITH, PRAGMA, or EXPLAIN")
 		}
 	} else {
 		if strings.HasPrefix(upper, "SELECT") {
@@ -114,4 +114,16 @@ func ListTables(ctx context.Context, reg Registry, dbID string) ([]string, error
 		}
 	}
 	return names, nil
+}
+
+func isReadOnlySQL(upper string) bool {
+	switch {
+	case strings.HasPrefix(upper, "SELECT"),
+		strings.HasPrefix(upper, "WITH"),
+		strings.HasPrefix(upper, "PRAGMA"),
+		strings.HasPrefix(upper, "EXPLAIN"):
+		return true
+	default:
+		return false
+	}
 }

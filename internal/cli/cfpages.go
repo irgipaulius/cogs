@@ -33,7 +33,8 @@ func ensurePagesCustomDomain(projectDir, projectName, pageHost string) error {
 		return err
 	}
 	target := projectName + ".pages.dev"
-	if err := ensureCNAMERecord(dnsToken, zoneID, pageHost, target); err != nil {
+	appName := projectName
+	if err := ensureCNAMERecordCoGS(projectDir, appName, "pages", pageHost, target, dnsToken, zoneID); err != nil {
 		return err
 	}
 	fmt.Printf("Pages UI: https://%s (CNAME → %s)\n", pageHost, target)

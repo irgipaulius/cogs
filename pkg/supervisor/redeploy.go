@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -36,8 +36,28 @@ func Redeploy(ctx context.Context, wsRoot, appName string) (detail string, err e
 	if err != nil {
 		return detail, fmt.Errorf("redeploy: %w", err)
 	}
-	_ = filepath.Join(wsRoot, "apps")
+	remote, branch, commit := gitInfo(wsRoot)
+	_ = cockpit.RecordDeploy(wsRoot, cockpit.DeployEvent{
+		App: appName, Action: "redeploy", Detail: detail,
+		GitRemote: remote, GitBranch: branch, GitCommit: commit,
+	})
 	return detail, nil
+}
+
+func gitInfo(wsRoot string) (remote, branch, commit string) {
+	cmd := exec.Command("git", "-C", wsRoot, "rev-parse", "--abbrev-ref", "HEAD")
+	if b, err := cmd.Output(); err == nil {
+		branch = strings.TrimSpace(string(b))
+	}
+	cmd = exec.Command("git", "-C", wsRoot, "rev-parse", "--short", "HEAD")
+	if b, err := cmd.Output(); err == nil {
+		commit = strings.TrimSpace(string(b))
+	}
+	cmd = exec.Command("git", "-C", wsRoot, "remote", "get-url", "origin")
+	if b, err := cmd.Output(); err == nil {
+		remote = strings.TrimSpace(string(b))
+	}
+	return remote, branch, commit
 }
 
 func gitPullFFOnly(ctx context.Context, root string) error {

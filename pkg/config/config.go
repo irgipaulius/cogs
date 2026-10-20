@@ -51,6 +51,8 @@ type App struct {
 	WorkspaceRoot     string
 	AdminDBPath       string
 	SupervisorSocket  string
+	AppName           string
+	TelemetryPath     string
 }
 
 // Load reads env from os.Environ, optionally overlaying a dotenv file.
@@ -153,6 +155,8 @@ func parse(vars map[string]string) (App, error) {
 		WorkspaceRoot:     get("COGS_WORKSPACE_ROOT"),
 		AdminDBPath:       get("COGS_ADMIN_DB_PATH"),
 		SupervisorSocket:  get("COGS_SUPERVISOR_SOCKET"),
+		AppName:           get("COGS_APP_NAME"),
+		TelemetryPath:     get("COGS_TELEMETRY_PATH"),
 	}
 
 	var missing []string
@@ -207,6 +211,8 @@ func LoadRelaxed(envFile string) (App, error) {
 		WorkspaceRoot:     get("COGS_WORKSPACE_ROOT"),
 		AdminDBPath:       get("COGS_ADMIN_DB_PATH"),
 		SupervisorSocket:  get("COGS_SUPERVISOR_SOCKET"),
+		AppName:           get("COGS_APP_NAME"),
+		TelemetryPath:     get("COGS_TELEMETRY_PATH"),
 	}, nil
 }
 

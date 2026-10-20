@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/accessjwt"
+	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/config"
 	"github.com/irgipaulius/cogs/pkg/ingress"
 	"github.com/irgipaulius/cogs/pkg/linkperf"
@@ -29,6 +30,7 @@ type Deps struct {
 	Metrics       http.Handler
 	PrivateOnly   bool
 	Observe       *observe.Runtime
+	Cockpit       *cockpit.Telemetry
 	Ingress       *ingress.Config
 	RegisterRoutes func(mux *http.ServeMux)
 }
@@ -88,8 +90,14 @@ func NewMux(d Deps) http.Handler {
 	if d.Observe != nil {
 		d.Observe.RegisterAdminRoutes(mux, d.Config.DBPath, d.DB)
 	}
+	if d.Cockpit != nil {
+		d.Cockpit.RegisterWellKnown(mux)
+	}
 
 	var h http.Handler = mux
+	if d.Cockpit != nil {
+		h = d.Cockpit.Middleware(h)
+	}
 	if d.Observe != nil {
 		h = d.Observe.Middleware(h)
 	}

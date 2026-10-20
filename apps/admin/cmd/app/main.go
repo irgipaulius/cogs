@@ -16,6 +16,7 @@ import (
 	"github.com/irgipaulius/cogs/apps/admin/internal/api"
 	"github.com/irgipaulius/cogs/apps/admin/internal/ui"
 	"github.com/irgipaulius/cogs/pkg/adminstore"
+	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/config"
 	"github.com/irgipaulius/cogs/pkg/supervisor"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -85,6 +86,15 @@ func serve(envFile string) error {
 		sock = supervisor.DefaultSocketPath(wsRoot)
 	}
 
+	appDir, _ := os.Getwd()
+	if wsRoot != "" {
+		appDir = filepath.Join(wsRoot, "apps", "admin")
+	}
+	if cfg.AppName == "" {
+		cfg.AppName = "admin"
+	}
+	tel := cockpit.FromConfig(cfg, appDir)
+
 	mux := http.NewServeMux()
 	srv := &api.Server{
 		Store:        store,
@@ -92,10 +102,11 @@ func serve(envFile string) error {
 		SecureCookie: strings.HasPrefix(cfg.PublicAPIURL, "https://"),
 	}
 	srv.Handler(mux, ui.Handler())
+	tel.RegisterWellKnown(mux)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           mux,
+		Handler:           tel.Middleware(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       5 * time.Minute,
 		WriteTimeout:      5 * time.Minute,

@@ -97,19 +97,42 @@ func (s *Server) dispatch(ctx context.Context, req Request) Response {
 		return Response{OK: false, Error: err.Error()}
 	}
 	switch req.Op {
-	case "metrics":
+	case "metrics", "cockpit":
 		if !user.HasPermission("*", adminstore.PermMetricsRead) {
 			return Response{OK: false, Error: "denied"}
 		}
-		return Response{OK: true, Data: encodeResponse(map[string]any{
-			"latest":  s.Metrics.Latest(),
-			"history": s.Metrics.Snapshot(),
-		})}
+		return Response{OK: true, Data: encodeResponse(s.Metrics.Board(s.Registry))}
 	case "metrics_stream_hint":
 		if !user.HasPermission("*", adminstore.PermMetricsRead) {
 			return Response{OK: false, Error: "denied"}
 		}
-		return Response{OK: true, Data: encodeResponse(s.Metrics.Latest())}
+		return Response{OK: true, Data: encodeResponse(s.Metrics.LatestForStream())}
+	case "telemetry":
+		if !user.HasPermission("*", adminstore.PermMetricsRead) && !user.HasPermission(req.App, adminstore.PermMetricsRead) {
+			return Response{OK: false, Error: "denied"}
+		}
+		dir, ok := s.Metrics.appPaths[req.App]
+		if !ok {
+			dir = filepath.Join(s.Registry.WorkspaceRoot, "apps", req.App)
+		}
+		return Response{OK: true, Data: encodeResponse(s.Metrics.loadCockpit(req.App, dir))}
+	case "logs":
+		if !user.HasPermission(req.App, adminstore.PermLogsRead) {
+			return Response{OK: false, Error: "denied"}
+		}
+		dir, ok := s.Metrics.appPaths[req.App]
+		if !ok {
+			dir = filepath.Join(s.Registry.WorkspaceRoot, "apps", req.App)
+		}
+		kind := req.LogKind
+		if kind == "" {
+			kind = "process"
+		}
+		lines, err := TailLog(dir, kind, 400)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		return Response{OK: true, Data: encodeResponse(lines)}
 	case "registry":
 		if !user.IsRoot && !user.HasPermission("*", adminstore.PermMetricsRead) {
 			return Response{OK: false, Error: "denied"}

@@ -124,7 +124,7 @@ Goal: same git repo on server, **linux/arm64** or **linux/amd64** binary, system
 2. Copy app `.env` securely (contains secrets); never commit `.env`.
 3. `cd apps/todo && /path/to/cogs migrate -env .env` then `serve` under systemd (see `cogs service render systemd`).
 4. **Tunnel handoff (automatic):** prod runs `cogs deploy` (or `launch`/`redeploy` with tunnel). New machine claims via `COGS_RUNNER_ID` + `/.well-known/cogs-runner`, Cloudflare API drops old tunnel connectors, then starts local tunnel+API. Other hosts run **lease watch** (auto on deploy) and **yield** when they see a newer claim. Separate prod DB: `migrate` on prod only.
-5. Verify: `curl -sS https://todo-api.<zone>/health`, Pages UI loads. **Public ops dashboard**: `cogs admin init` then `cogs launch admin -y` → `https://admin.<zone>`. Per-app `/admin` stays loopback-only.
+5. Verify: `curl -sS https://todo-api.<zone>/health`, Pages UI loads. **Public ops dashboard**: `cogs admin init` then `cogs launch admin -y` → `https://cogs-admin.<zone>` (not `admin.*` — avoid NAS/host conflicts). Per-app `/admin` stays loopback-only.
 
 If SSH details are unknown, **stop and ask the user** for host, user, arch, and whether cloudflared should move off the Mac.
 

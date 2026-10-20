@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/observe"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 	"github.com/shirou/gopsutil/v3/process"
@@ -18,9 +19,10 @@ const metricsHistory = 900
 
 // MetricsSample is one point in time.
 type MetricsSample struct {
-	At   time.Time            `json:"at"`
-	Host observe.HostSnapshot `json:"host"`
-	Apps []AppMetrics         `json:"apps"`
+	At        time.Time            `json:"at"`
+	Host      observe.HostSnapshot `json:"host"`
+	Apps      []AppMetrics         `json:"apps"`
+	Telemetry map[string]cockpit.Snapshot `json:"telemetry,omitempty"`
 }
 
 // AppMetrics per workspace app.
@@ -90,12 +92,22 @@ func (r *MetricsRing) Latest() MetricsSample {
 	return r.samples[len(r.samples)-1]
 }
 
+// LatestForStream attaches slim telemetry (no access-log lines) for overview SSE ticks.
+func (r *MetricsRing) LatestForStream() MetricsSample {
+	s := r.Latest()
+	tel := map[string]cockpit.Snapshot{}
+	for name, dir := range r.appPaths {
+		snap := r.loadCockpit(name, dir)
+		snap.Recent = nil
+		tel[name] = snap
+	}
+	s.Telemetry = tel
+	return s
+}
+
 func (r *MetricsRing) collect(at time.Time) MetricsSample {
 	s := MetricsSample{At: at, Host: observe.SnapshotHost()}
 	for _, a := range r.ws.Apps {
-		if a.Name == "admin" {
-			continue
-		}
 		dir := r.appPaths[a.Name]
 		am := AppMetrics{Name: a.Name}
 		pidPath := filepath.Join(dir, ".cogs", "run", "app.pid")
@@ -112,6 +124,11 @@ func (r *MetricsRing) collect(at time.Time) MetricsSample {
 						am.RSSMB = float64(mi.RSS) / (1024 * 1024)
 					}
 				}
+			}
+		}
+		if !am.Running {
+			if probeHealth(healthURLForApp(a.Name, dir)) {
+				am.Running = true
 			}
 		}
 		reg, _ := LoadRegistry(r.wsRoot)

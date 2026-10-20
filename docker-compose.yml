@@ -57,8 +57,11 @@ services:
       COGS_SESSION_SECRET: ${COGS_SESSION_SECRET:-docker-dev-change-me}
       COGS_PUBLIC_PAGE_ORIGIN: ${COGS_PUBLIC_PAGE_ORIGIN:-http://127.0.0.1:8788}
       COGS_PUBLIC_API_URL: ${COGS_PUBLIC_API_URL:-http://127.0.0.1:18787}
+      COGS_APP_NAME: todo
+      COGS_TELEMETRY_PATH: /data/telemetry.json
     volumes:
       - ./apps/todo/data:/data
+      - ./apps/todo/.cogs/run:/run/cogs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18787/health"]
       interval: 10s
@@ -72,6 +75,9 @@ services:
       context: .
       dockerfile: apps/admin/Dockerfile
     image: cogs-admin:local
+    depends_on:
+      todo-api:
+        condition: service_healthy
     ports:
       - "${COGS_ADMIN_PORT:-18786}:18786"
     env_file:
@@ -88,6 +94,11 @@ services:
       COGS_PUBLIC_PAGE_ORIGIN: http://127.0.0.1:18786
       COGS_PUBLIC_API_URL: http://127.0.0.1:18786
       COGS_SUPERVISOR_SOCKET: /tmp/cogs-supervisor.sock
+      COGS_TELEMETRY_PATH: /workspace/apps/admin/.cogs/run/telemetry.json
+      COGS_APP_NAME: admin
+      COGS_PUBLIC_ZONE: ${COGS_PUBLIC_ZONE:-hyperreader.eu}
+      COGS_APP_HEALTH_TODO: http://todo-api:18787/health
+      COGS_APP_HEALTH_ADMIN: http://127.0.0.1:18786/health
     volumes:
       - .:/workspace
     healthcheck:
