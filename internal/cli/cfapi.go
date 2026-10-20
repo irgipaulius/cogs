@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 type cfResponse struct {
-	Success bool              `json:"success"`
-	Errors  []cfError         `json:"errors"`
-	Result  json.RawMessage   `json:"result"`
+	Success bool            `json:"success"`
+	Errors  []cfError       `json:"errors"`
+	Result  json.RawMessage `json:"result"`
 }
 
 type cfError struct {
@@ -22,25 +24,60 @@ type cfError struct {
 	Message string `json:"message"`
 }
 
-// cfTokenDNS is for zone DNS records (COGS_CF_API_TOKEN). Wrangler OAuth cannot edit DNS.
-func cfTokenDNS(projectDir string) (string, error) {
-	if t := os.Getenv("COGS_CF_API_TOKEN"); t != "" {
+// cfTokenDNS is for zone DNS records. Prefers workspace token, then env, then legacy app .env.
+func cfTokenDNS(projectDir, zoneName string) (string, error) {
+	if t := strings.TrimSpace(os.Getenv("COGS_CF_API_TOKEN")); t != "" {
 		return t, nil
 	}
-	if projectDir != "" {
-		if b, err := os.ReadFile(filepath.Join(projectDir, ".env")); err == nil {
-			for _, line := range strings.Split(string(b), "\n") {
-				if strings.HasPrefix(line, "COGS_CF_API_TOKEN=") {
-					t := strings.TrimSpace(strings.TrimPrefix(line, "COGS_CF_API_TOKEN="))
-					t = strings.Trim(t, `"'`)
-					if t != "" {
-						return t, nil
-					}
-				}
+	if wsRoot, _, err := workspace.FindRoot(projectDir); err == nil {
+		if zoneName != "" {
+			if t, err := workspace.DNSTokenForZone(wsRoot, zoneName); err == nil && t != "" {
+				return t, nil
 			}
+		} else if t, err := workspace.DNSTokenForZone(wsRoot, ""); err == nil && t != "" {
+			return t, nil
 		}
 	}
+	if t := legacyAppCFToken(projectDir); t != "" {
+		return t, nil
+	}
 	return wranglerOAuthToken()
+}
+
+func legacyAppCFToken(projectDir string) string {
+	if projectDir == "" {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(projectDir, ".env"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "COGS_CF_API_TOKEN=") {
+			t := strings.TrimSpace(strings.TrimPrefix(line, "COGS_CF_API_TOKEN="))
+			t = strings.Trim(t, `"'`)
+			return t
+		}
+	}
+	return ""
+}
+
+func migrateLegacyTokenToWorkspace(projectDir, zoneName string) {
+	wsRoot, _, err := workspace.FindRoot(projectDir)
+	if err != nil || zoneName == "" {
+		return
+	}
+	if t, err := workspace.DNSTokenForZone(wsRoot, zoneName); err == nil && t != "" {
+		return
+	}
+	legacy := legacyAppCFToken(projectDir)
+	if legacy == "" {
+		return
+	}
+	if !tokenCanEditDNS(legacy, zoneName) {
+		return
+	}
+	_ = workspace.SaveDNSToken(wsRoot, zoneName, legacy)
 }
 
 // cfTokenTunnel is for Cloudflare Tunnel / Pages API (Wrangler session). Do not use DNS-only tokens here.
@@ -49,8 +86,8 @@ func cfTokenTunnel() (string, error) {
 }
 
 // cfToken is an alias for DNS operations.
-func cfToken(projectDir string) (string, error) {
-	return cfTokenDNS(projectDir)
+func cfToken(projectDir, zoneName string) (string, error) {
+	return cfTokenDNS(projectDir, zoneName)
 }
 
 func cfRequest(token, method, url string, body any) (cfResponse, error) {
@@ -92,4 +129,3 @@ func cfRequest(token, method, url string, body any) (cfResponse, error) {
 	}
 	return out, nil
 }
-

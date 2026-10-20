@@ -24,6 +24,10 @@ type Manifest struct {
 	MaxUploadBytes int64  `json:"max_upload_bytes"`
 	// Kind "combined" = one public hostname serves embedded SPA + API (admin dashboard).
 	Kind string `json:"kind,omitempty"`
+	// Attachments: app stores uploads on host (COGS_BLOB_DIR); show launch notes when true.
+	Attachments bool `json:"attachments,omitempty"`
+	// BlobKeyPrefix is the object key prefix under the blob store (e.g. todo-images).
+	BlobKeyPrefix string `json:"blob_key_prefix,omitempty"`
 }
 
 // IsCombined is true for apps like admin (no separate Pages project).

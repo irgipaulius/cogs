@@ -69,7 +69,7 @@ Use this to validate launch/redeploy/tunnel/DNS.
 - `COGS_SESSION_SECRET` — random string
 - `COGS_PUBLIC_PAGE_ORIGIN` — `https://todo.<zone>`
 - `COGS_PUBLIC_API_URL` — `https://todo-api.<zone>`
-- `COGS_CF_API_TOKEN` — Cloudflare API token with **Zone DNS Edit** for the apex zone (DNS automation; Wrangler OAuth alone is insufficient for CNAME creation)
+- **Workspace DNS token** — `.cogs/cloudflare/dns.token` (or zone file + `tokens.json`); one token reused by all apps. Optional override: `COGS_CF_API_TOKEN` env. Legacy per-app `.env` still read once and migrated. Wrangler OAuth alone cannot edit DNS.
 
 **Observability:**
 

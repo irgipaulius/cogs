@@ -83,8 +83,8 @@ func runLaunch(flags launchFlags) error {
 	} else {
 		explainLaunchNetworking(m, pageHost, apiHost)
 	}
-	if !flags.quick {
-		explainBlobStorage(abs)
+	if !flags.quick && m.Attachments {
+		explainBlobStorage(abs, m)
 	}
 
 	if !flags.yes {
@@ -137,8 +137,10 @@ func runLaunch(flags launchFlags) error {
 		fmt.Println("\n→ Cloudflare D1 (edge read replica)")
 		_ = wranglerTryCreate("d1", "create", m.D1Name)
 
-		fmt.Println("→ R2 bucket (optional — edge sync via cogs sync; attachments use local COGS_BLOB_DIR by default)")
-		_ = wranglerTryCreate("r2", "bucket", "create", m.R2Bucket)
+		if m.Attachments && m.R2Bucket != "" {
+			fmt.Println("→ R2 bucket (optional — edge sync via cogs sync; local COGS_BLOB_DIR by default)")
+			_ = wranglerTryCreate("r2", "bucket", "create", m.R2Bucket)
+		}
 	}
 
 	if !flags.quick {
@@ -290,8 +292,6 @@ COGS_R2_SECRET_ACCESS_KEY=
 COGS_D1_ACCOUNT_ID=
 COGS_D1_DATABASE_ID=
 COGS_D1_API_TOKEN=
-# Required for automatic DNS on launch (Zone DNS Edit); filled when you paste token at prompt
-COGS_CF_API_TOKEN=
 COGS_OBS=file
 COGS_OBS_LOG=
 `, listenAddr(m.BindHost, m.Port), secret, pageHost, apiHost, m.MaxUploadBytes, m.R2Bucket)

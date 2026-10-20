@@ -7,7 +7,7 @@ import (
 )
 
 func ensurePagesCustomDomain(projectDir, projectName, pageHost string) error {
-	dnsToken, err := cfTokenDNS(projectDir)
+	dnsToken, err := cfTokenDNS(projectDir, zoneNameFromHost(pageHost))
 	if err != nil {
 		return err
 	}

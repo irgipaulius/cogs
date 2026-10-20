@@ -299,7 +299,7 @@ func apiHostFromProject(projectDir string, m launch.Manifest) (string, error) {
 }
 
 func ensureTunnelDNS(projectDir, tunnelName, fqdn string) error {
-	dnsToken, err := cfTokenDNS(projectDir)
+	dnsToken, err := cfTokenDNS(projectDir, zoneNameFromHost(fqdn))
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,6 @@ COGS_ADMIN_DB_PATH=data/admin.db
 COGS_WORKSPACE_ROOT=%s
 COGS_PUBLIC_PAGE_ORIGIN=%s
 COGS_PUBLIC_API_URL=%s
-COGS_CF_API_TOKEN=
 `, listenAddr(m.BindHost, m.Port), wsRoot, origin, origin)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err

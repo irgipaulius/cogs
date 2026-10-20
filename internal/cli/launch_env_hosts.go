@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -24,7 +25,29 @@ func hostsFromEnv(envPath string) (pageHost, apiHost string, ok bool) {
 	if pageHost == "" || apiHost == "" {
 		return "", "", false
 	}
+	if !isPublicLaunchHost(pageHost) || !isPublicLaunchHost(apiHost) {
+		return "", "", false
+	}
 	return pageHost, apiHost, true
+}
+
+// isPublicLaunchHost rejects LAN URLs mistakenly stored in COGS_PUBLIC_* (e.g. http://192.168.x.x:port).
+func isPublicLaunchHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	h := host
+	if strings.Contains(h, ":") {
+		h, _, _ = strings.Cut(h, ":")
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return false
+	}
+	if h == "localhost" || strings.HasSuffix(h, ".local") {
+		return false
+	}
+	return strings.Contains(host, ".")
 }
 
 func hostFromEnvURL(raw string) string {

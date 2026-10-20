@@ -9,5 +9,7 @@
   "r2_bucket": "cogs-todo-images",
   "tunnel_name": "cogs-todo-app",
   "pages_project": "cogs-todo-app",
-  "max_upload_bytes": 12582912
+  "max_upload_bytes": 12582912,
+  "attachments": true,
+  "blob_key_prefix": "todo-images"
 }
