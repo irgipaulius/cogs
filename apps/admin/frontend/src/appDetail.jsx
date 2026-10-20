@@ -352,8 +352,8 @@ export function AppDetailView({
         <div className="card">
           <h3>Geography</h3>
           <p className="muted">
-            Reads (GET/HEAD) vs writes (POST/PATCH/PUT/DELETE) by country from Cloudflare{' '}
-            <code>CF-IPCountry</code>.
+            Country = ISO alpha-2 from Cloudflare <code>CF-IPCountry</code> (same codes as the map and
+            table). Reads vs writes split by HTTP method.
           </p>
           <div className="stream-controls">
             {[

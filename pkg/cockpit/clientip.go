@@ -32,7 +32,9 @@ func ClientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// ClientCountry from Cloudflare (ISO 3166-1 alpha-2), if present.
+// ClientCountry returns ISO 3166-1 alpha-2 from Cloudflare CF-IPCountry when the
+// request is proxied through Cloudflare (tunnel, Workers, etc.). No IP geolocation
+// is performed in CoGS; keys in telemetry by_country* use this same alpha-2 code.
 func ClientCountry(r *http.Request) string {
 	cc := strings.ToUpper(strings.TrimSpace(r.Header.Get("CF-IPCountry")))
 	if cc == "" || cc == "XX" || cc == "T1" {
