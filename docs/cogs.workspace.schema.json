@@ -6,6 +6,15 @@
   "required": ["name", "apps"],
   "properties": {
     "name": { "type": "string" },
+    "deploy": {
+      "type": "object",
+      "properties": {
+        "bind_host": { "type": "string" },
+        "base_port": { "type": "integer" },
+        "port_step": { "type": "integer" },
+        "reserved_ports": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
     "apps": {
       "type": "array",
       "items": {

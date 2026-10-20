@@ -10,8 +10,9 @@ const FileName = "cogs.workspace.json"
 
 // Root describes the monorepo orchestrator layout.
 type Root struct {
-	Name string `json:"name"`
-	Apps []App  `json:"apps"`
+	Name   string `json:"name"`
+	Deploy Deploy `json:"deploy"`
+	Apps   []App  `json:"apps"`
 }
 
 // App is one deployable unit under apps/.
@@ -34,6 +35,7 @@ func FindRoot(startDir string) (rootDir string, root Root, err error) {
 			if err := json.Unmarshal(b, &r); err != nil {
 				return "", Root{}, err
 			}
+			r.ApplyDeployDefaults()
 			return dir, r, nil
 		}
 		parent := filepath.Dir(dir)

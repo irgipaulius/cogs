@@ -15,6 +15,7 @@ type Manifest struct {
 	PagesDir       string `json:"pages_dir"`
 	PageSubdomain  string `json:"page_subdomain"`  // todo -> todo.example.com
 	APISubdomain   string `json:"api_subdomain"`   // todo-api -> todo-api.example.com
+	BindHost       string `json:"bind_host,omitempty"`
 	Port           int    `json:"port"`
 	D1Name         string `json:"d1_name"`
 	R2Bucket       string `json:"r2_bucket"`
@@ -48,9 +49,10 @@ func (m *Manifest) applyDefaults() {
 	if m.APISubdomain == "" {
 		m.APISubdomain = m.PageSubdomain + "-api"
 	}
-	if m.Port == 0 {
-		m.Port = 8080
+	if m.BindHost == "" {
+		m.BindHost = "127.0.0.1"
 	}
+	// Port 0 = workspace auto-assign (see pkg/workspace AssignPorts).
 	if m.D1Name == "" {
 		m.D1Name = m.Name + "-edge"
 	}

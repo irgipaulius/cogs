@@ -84,7 +84,7 @@ func parse(vars map[string]string) (App, error) {
 	get := func(key string) string { return vars[key] }
 
 	c := App{
-		ListenAddr:        firstNonEmpty(get("COGS_LISTEN"), "127.0.0.1:8080"),
+		ListenAddr:        firstNonEmpty(get("COGS_LISTEN"), "127.0.0.1:18787"),
 		AllowPublicBind:   truthy(get("COGS_ALLOW_PUBLIC_BIND")),
 		DBPath:            firstNonEmpty(get("COGS_DB_PATH"), "data.db"),
 		SessionSecret:     get("COGS_SESSION_SECRET"),
@@ -145,7 +145,7 @@ func LoadRelaxed(envFile string) (App, error) {
 	}
 	get := func(key string) string { return vars[key] }
 	return App{
-		ListenAddr:        firstNonEmpty(get("COGS_LISTEN"), "127.0.0.1:8080"),
+		ListenAddr:        firstNonEmpty(get("COGS_LISTEN"), "127.0.0.1:18787"),
 		AllowPublicBind:   truthy(get("COGS_ALLOW_PUBLIC_BIND")),
 		DBPath:            firstNonEmpty(get("COGS_DB_PATH"), "data.db"),
 		SessionSecret:     get("COGS_SESSION_SECRET"),

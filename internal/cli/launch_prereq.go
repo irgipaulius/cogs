@@ -19,7 +19,7 @@ func explainLaunchNetworking(m launch.Manifest, pageHost, apiHost string) {
 	fmt.Println("  Only the API hostname uses the Cloudflare Tunnel to reach this machine.")
 	fmt.Println()
 	fmt.Println("  Browser ──► https://" + pageHost + "  →  Pages (" + m.PagesProject + ".pages.dev)")
-	fmt.Println("  Browser ──► https://" + apiHost + "  →  Tunnel → 127.0.0.1:" + fmt.Sprint(m.Port))
+	fmt.Println("  Browser ──► https://" + apiHost + "  →  Tunnel → " + listenAddr(m.BindHost, m.Port))
 	fmt.Println()
 	fmt.Println("  Two proxied CNAME records on your zone are required (cogs creates them for you):")
 	fmt.Printf("    %s  →  %s.pages.dev\n", pageHost, m.PagesProject)

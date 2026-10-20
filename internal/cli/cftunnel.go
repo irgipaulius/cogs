@@ -228,7 +228,7 @@ func tunnelFix(projectDir string) error {
 		return err
 	}
 	pageHost, _ := pageHostFromProject(projectDir)
-	localSvc := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
+	localSvc := "http://" + listenAddr(m.BindHost, m.Port)
 	zone := launchZoneName(pageHost, apiHost)
 	if zone == "" {
 		zone = zoneNameFromHost(apiHost)

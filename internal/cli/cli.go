@@ -7,6 +7,7 @@ import (
 
 // Run dispatches cogs subcommands.
 func Run(args []string) error {
+	args = peelGlobalFlags(args)
 	if len(args) == 0 {
 		return usage()
 	}
@@ -17,6 +18,8 @@ func Run(args []string) error {
 		return cmdBuild(args[1:])
 	case "deploy":
 		return cmdDeploy(args[1:])
+	case "ping":
+		return cmdPing(args[1:])
 	case "launch":
 		return cmdLaunch(args[1:])
 	case "redeploy":
@@ -68,7 +71,11 @@ Usage:
   cogs launch [app|path] [-y] [--quick]   provision or fast redeploy
   cogs redeploy [app|path]            launch --quick -y
   cogs <app|path>                     launch when path or workspace app name resolves
-  cogs deploy <ssh-host> [--target os/arch] [--service systemd|rcd|launchd]
+  cogs deploy [--app NAME]... [--ping] [--dry-run] [--full] [--serial]
+              deploy all workspace apps (default: quick + parallel + background serve)
+  cogs deploy --remote <user@host> [--target os/arch]
+  cogs ping [app|path] [--link] [--url URL]
+  Global: --json --dry-run -q --verbose --no-color
   cogs service render <systemd|rcd|launchd>
   cogs tunnel run|start|stop|status [name] [--dir .]
   cogs tunnel init <hostname>

@@ -9,7 +9,7 @@ Read this before changing launch behavior, adding apps, or deploying remotely.
 | Layer | Where it runs | Source of truth |
 |--------|----------------|-----------------|
 | UI | Cloudflare Pages (`todo.<zone>`) | Built static assets in app `public/` |
-| API | Loopback on host (`127.0.0.1:8080`) | Go binary + **SQLite file on disk** |
+| API | Loopback on host (`deploy.bind_host:port` from `cogs.workspace.json`) | Go binary + **SQLite file on disk** |
 | Public API URL | Cloudflare Tunnel → same loopback | `todo-api.<zone>` CNAME → tunnel |
 | Edge cache | D1 / R2 (optional) | Projected via `cogs sync`; SQLite wins |
 
@@ -74,7 +74,7 @@ Use this to validate launch/redeploy/tunnel/DNS.
 **Observability:**
 
 - `COGS_OBS=file` (default) or `off` | `dashboard`
-- Local admin hub: `http://127.0.0.1:8080/admin` (loopback Host only; returns 404 on public tunnel hostname)
+- Local admin hub: `http://<COGS_LISTEN>/admin` (loopback Host only; returns 404 on public tunnel hostname)
 
 **Tokens split (important):**
 
@@ -128,13 +128,22 @@ Goal: same git repo on server, **linux/arm64** or **linux/amd64** binary, system
 
 If SSH details are unknown, **stop and ask the user** for host, user, arch, and whether cloudflared should move off the Mac.
 
+## Ports and workspace deploy
+
+- **`cogs.workspace.json` → `deploy`**: `base_port` (default **18787**), `port_step`, `reserved_ports` (includes **8080**).
+- Each app: `cogs.launch.json` **`port`: 0** = auto-assign; app *n* gets `base_port + n*step`, skipping reserved/used ports.
+- **`cogs deploy`** at repo root: all apps, default **quick + parallel + background serve**. Flags: `--app NAME`, `--ping`, `--dry-run`, `--serial`, `--full`, `--skip-ui-build`, etc.
+- **Agents**: prefer **`--json`** and **`--dry-run`**; global flags work on every subcommand (`COGS_JSON=1` also enables JSON).
+
 ## Commands cheat sheet
 
 | Intent | Command |
 |--------|---------|
-| List apps | `cogs apps list` |
+| List apps + ports | `cogs apps list` |
+| Deploy entire workspace | `cogs deploy --ping` |
 | First-time / infra | `cogs launch todo -y` |
 | Daily deploy | `cogs redeploy todo` |
+| Health check | `cogs ping todo` |
 | DNS/tunnel repair | `cogs tunnel fix --dir apps/todo` |
 | Doctor | `cogs doctor -env apps/todo/.env` |
 | Build cross-compile | `cogs build --target linux/arm64` |

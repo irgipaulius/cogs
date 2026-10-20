@@ -19,6 +19,8 @@ type launchFlags struct {
 	skipUIBuild bool
 	pickZone    bool
 	quick       bool
+	noServe     bool
+	serveMode   serveMode
 }
 
 func parseLaunchFlags(args []string) (launchFlags, error) {
@@ -33,11 +35,21 @@ func parseLaunchFlags(args []string) (launchFlags, error) {
 	fs.BoolVar(&f.skipUIBuild, "skip-ui-build", false, "skip npm build when frontend/ exists")
 	fs.BoolVar(&f.pickZone, "pick-zone", false, "always show zone picker (default: reuse .env hostnames)")
 	fs.BoolVar(&f.quick, "quick", false, "redeploy only: UI build, Pages, migrate, serve (skip Cloudflare provisioning)")
+	fs.BoolVar(&f.noServe, "no-serve", false, "migrate/build only; do not start API")
+	bgServe := false
+	fs.BoolVar(&bgServe, "background-serve", false, "start API in background (.cogs/run/app.pid)")
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
 	if rest := fs.Args(); len(rest) > 0 {
 		f.dir = rest[0]
+	}
+	if f.noServe {
+		f.serveMode = serveSkip
+	} else if bgServe {
+		f.serveMode = serveBackground
+	} else {
+		f.serveMode = serveForeground
 	}
 	return f, nil
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func configurePublicHosts(projectDir string, m launch.Manifest, pageHost, apiHost string) error {
-	localSvc := fmt.Sprintf("http://127.0.0.1:%d", m.Port)
+	localSvc := "http://" + listenAddr(m.BindHost, m.Port)
 	if err := ensureTunnelIngress(projectDir, m.TunnelName, apiHost, localSvc); err != nil {
 		return fmt.Errorf("tunnel ingress: %w", err)
 	}

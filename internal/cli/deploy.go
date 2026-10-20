@@ -12,24 +12,45 @@ import (
 
 func cmdDeploy(args []string) error {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
-	target := fs.String("target", "", "GOOS/GOARCH for cross-build")
+	target := fs.String("target", "", "GOOS/GOARCH for cross-build (remote SSH deploy)")
 	service := fs.String("service", "systemd", "service kind")
 	rollback := fs.Bool("rollback", false, "roll back to .prev binary")
-	_ = fs.Parse(args)
-	rest := fs.Args()
-	if len(rest) < 1 {
-		return fmt.Errorf("usage: cogs deploy <user@host>")
-	}
-	host := rest[0]
-	if *rollback {
-		return remoteRollback(host)
-	}
-	if err := cmdBuild([]string{"--target", defaultTarget(*target)}); err != nil {
+	remote := fs.Bool("remote", false, "force SSH deploy (requires user@host)")
+	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	bin := localBinary(*target)
-	remote := "/usr/local/bin/cogs-app"
-	scp := exec.Command("scp", bin, host+":"+remote+".new")
+	rest := fs.Args()
+
+	if len(rest) >= 1 && (strings.Contains(rest[0], "@") || *remote) {
+		return cmdDeployRemote(rest, deployRemoteOpts{
+			target:   *target,
+			service:  *service,
+			rollback: *rollback,
+		})
+	}
+	return cmdDeployWorkspace(rest)
+}
+
+type deployRemoteOpts struct {
+	target   string
+	service  string
+	rollback bool
+}
+
+func cmdDeployRemote(rest []string, o deployRemoteOpts) error {
+	if len(rest) < 1 {
+		return fmt.Errorf("usage: cogs deploy --remote <user@host>")
+	}
+	host := rest[0]
+	if o.rollback {
+		return remoteRollback(host)
+	}
+	if err := cmdBuild([]string{"--target", defaultTarget(o.target)}); err != nil {
+		return err
+	}
+	bin := localBinary(o.target)
+	remotePath := "/usr/local/bin/cogs-app"
+	scp := exec.Command("scp", bin, host+":"+remotePath+".new")
 	scp.Stdout = os.Stdout
 	scp.Stderr = os.Stderr
 	if err := scp.Run(); err != nil {
@@ -41,7 +62,7 @@ if [ -f %[1]s ]; then mv %[1]s %[1]s.prev; fi
 mv %[1]s.new %[1]s
 chmod +x %[1]s
 sudo systemctl restart cogs-app || true
-`, remote)
+`, remotePath)
 	ssh := exec.Command("ssh", host, script)
 	ssh.Stdout = os.Stdout
 	ssh.Stderr = os.Stderr
@@ -54,7 +75,7 @@ sudo systemctl restart cogs-app || true
 		_ = remoteRollback(host)
 		return err
 	}
-	fmt.Println("deploy ok:", *service)
+	fmt.Println("deploy ok:", o.service)
 	return nil
 }
 

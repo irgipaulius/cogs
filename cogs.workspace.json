@@ -1,6 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/irgipaulius/cogs/main/docs/cogs.workspace.schema.json",
   "name": "cogs",
+  "deploy": {
+    "bind_host": "127.0.0.1",
+    "base_port": 18787,
+    "port_step": 1,
+    "reserved_ports": [8080, 8443, 3000, 5000]
+  },
   "apps": [
     {
       "name": "todo",

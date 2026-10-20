@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/launch"
 )
 
@@ -20,7 +21,10 @@ func cmdLaunch(args []string) error {
 	if err != nil {
 		return err
 	}
+	return runLaunch(flags)
+}
 
+func runLaunch(flags launchFlags) error {
 	abs, err := resolveLaunchProjectDir(flags.dir)
 	if err != nil {
 		return err
@@ -29,9 +33,13 @@ func cmdLaunch(args []string) error {
 	if err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
+	resolveListen(abs, &m)
+	_ = launch.Save(abs, m)
 
-	if err := ensureWranglerLogin(); err != nil {
-		return err
+	if !flags.quick {
+		if err := ensureWranglerLogin(); err != nil {
+			return err
+		}
 	}
 
 	envPath := filepath.Join(abs, ".env")
@@ -73,6 +81,16 @@ func cmdLaunch(args []string) error {
 		if err != nil || !ok {
 			return nil
 		}
+	}
+
+	if globals.DryRun {
+		ux.Plan("launch dry-run", []string{
+			"listen: " + listenAddr(m.BindHost, m.Port),
+			"UI: https://" + pageHost,
+			"API: https://" + apiHost,
+			"quick: " + fmt.Sprint(flags.quick),
+		})
+		return nil
 	}
 
 	if err := ensureEnv(envPath, m, pageHost, apiHost); err != nil {
@@ -136,8 +154,8 @@ func cmdLaunch(args []string) error {
 		return err
 	}
 
-	fmt.Println("\n--- Running locally ---")
-	fmt.Printf("API will listen on 127.0.0.1:%d\n", m.Port)
+	ux.Title("Running locally")
+	ux.Info("API listen " + listenAddr(m.BindHost, m.Port))
 	if flags.skipTunnel {
 		fmt.Println("Tunnel skipped (--skip-tunnel); API is local only.")
 	} else {
@@ -157,21 +175,30 @@ func cmdLaunch(args []string) error {
 		fmt.Printf("\nStart tunnel when ready: cogs tunnel start %s\n", m.TunnelName)
 	}
 
-	fmt.Println("\nStarting server (Ctrl+C stops app; tunnel keeps running unless you cogs tunnel stop)…")
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sig
-		os.Exit(0)
-	}()
-
-	return runGo(abs, "run", "./cmd/app", "serve", "-env", ".env")
+	switch flags.serveMode {
+	case serveSkip:
+		ux.OK("skipped API serve (--no-serve)")
+		return nil
+	case serveBackground:
+		return startAppBackground(abs)
+	default:
+		ux.Info("Starting server (Ctrl+C stops app; tunnel keeps running unless you cogs tunnel stop)…")
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sig
+			os.Exit(0)
+		}()
+		return runGo(abs, "run", "./cmd/app", "serve", "-env", ".env")
+	}
 }
 
 func ensureEnv(path string, m launch.Manifest, pageHost, apiHost string) error {
 	if _, err := os.Stat(path); err == nil {
-		fmt.Println("Using existing .env")
+		ux.Info("Using existing .env")
+		if err := setEnvKey(path, "COGS_LISTEN", listenAddr(m.BindHost, m.Port)); err != nil {
+			return err
+		}
 		return appendEnvKeys(path, map[string]string{
 			"COGS_PUBLIC_PAGE_ORIGIN": "https://" + pageHost,
 			"COGS_PUBLIC_API_URL":     "https://" + apiHost,
@@ -179,7 +206,7 @@ func ensureEnv(path string, m launch.Manifest, pageHost, apiHost string) error {
 		})
 	}
 	secret, _ := randomHex(32)
-	content := fmt.Sprintf(`COGS_LISTEN=127.0.0.1:%d
+	content := fmt.Sprintf(`COGS_LISTEN=%s
 COGS_DB_PATH=data/todo.db
 COGS_SESSION_SECRET=%s
 COGS_PUBLIC_PAGE_ORIGIN=https://%s
@@ -197,7 +224,7 @@ COGS_D1_API_TOKEN=
 COGS_CF_API_TOKEN=
 COGS_OBS=file
 COGS_OBS_LOG=
-`, m.Port, secret, pageHost, apiHost, m.R2Bucket, m.MaxUploadBytes)
+`, listenAddr(m.BindHost, m.Port), secret, pageHost, apiHost, m.R2Bucket, m.MaxUploadBytes)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
@@ -206,6 +233,31 @@ COGS_OBS_LOG=
 	}
 	fmt.Println("Wrote", path)
 	return nil
+}
+
+func setEnvKey(path, key, value string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(b), "\n")
+	prefix := key + "="
+	found := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			lines[i] = prefix + value
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, prefix+value)
+	}
+	out := strings.Join(lines, "\n")
+	if !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	return os.WriteFile(path, []byte(out), 0o600)
 }
 
 func appendEnvKeys(path string, kv map[string]string) error {

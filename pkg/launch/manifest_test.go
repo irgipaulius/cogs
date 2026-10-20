@@ -15,7 +15,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.APISubdomain != "todo-api" || m.Port != 8080 {
+	if m.APISubdomain != "todo-api" || m.Port != 0 {
 		t.Fatalf("%+v", m)
 	}
 }
