@@ -26,7 +26,7 @@ cp .env.docker.example .env.docker   # optional overrides
 docker compose -f docker-compose.yml up --build
 ```
 
-- **Port**: `18787` API, `9000` MinIO S3 API, `9001` MinIO console.
+- **Port**: `18787` API. MinIO stays on the Docker network (`minio:9000`); uncomment `ports` in compose to expose console/S3 on the host (defaults `19000`/`19001` if you set them).
 - **SQLite**: `./data/todo.db` bind mount.
 - **Blobs**: `COGS_BLOB_STORE=minio` → `http://minio:9000` bucket `cogs-todo-blobs` (not Cloudflare R2).
 - **Large files**: compose sets `COGS_MAX_UPLOAD_BYTES=104857600` (100 MiB). For a **99 MiB** test, upload via **`http://127.0.0.1:18787`** (direct to Docker). The **tunnel hostname** may reject bodies near Cloudflare’s ~100 MiB limit even when the app allows more.
