@@ -47,6 +47,18 @@ Fill R2 credentials in `.env` for image uploads. Sync edge reads later:
 cogs sync -env .env --set todos
 ```
 
+## Docker (optional)
+
+Native **`cogs launch` / `cogs deploy`** stays the default. To run only the API in a container (Linux/CI):
+
+```bash
+# repo root
+docker build -f apps/todo/Dockerfile -t cogs-todo .
+docker compose -f apps/todo/docker-compose.yml up --build
+```
+
+See [docs/docker.md](../../docs/docker.md).
+
 ## Local-only dev
 
 ```bash

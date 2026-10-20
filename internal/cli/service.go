@@ -45,9 +45,30 @@ func cmdService(args []string) error {
 	if err := tmpl.Execute(&b, data); err != nil {
 		return err
 	}
-	out := filepath.Base(rel)
-	if kind == "systemd" {
-		out = "cogs-app.service"
+	out := serviceRenderOutputPath(kind, rel)
+	if err := os.WriteFile(out, []byte(b.String()), 0o644); err != nil {
+		return err
 	}
-	return os.WriteFile(out, []byte(b.String()), 0o644)
+	if kind == "rcd" {
+		// Installer must be executable; rendered file in cwd is a template copy.
+		fmt.Printf("Wrote %s\n", out)
+		fmt.Println("Install: sudo install -m 555 cogs-app.rc /usr/local/etc/rc.d/cogs_app")
+		fmt.Println("Enable:  echo 'cogs_app_enable=\"YES\"' | sudo tee -a /etc/rc.conf")
+		return nil
+	}
+	fmt.Printf("Wrote %s\n", out)
+	return nil
+}
+
+func serviceRenderOutputPath(kind, rel string) string {
+	switch kind {
+	case "systemd":
+		return "cogs-app.service"
+	case "rcd":
+		return "cogs-app.rc"
+	case "launchd":
+		return "com.cogs.app.plist"
+	default:
+		return filepath.Base(rel)
+	}
 }

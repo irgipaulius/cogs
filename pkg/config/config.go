@@ -49,19 +49,26 @@ func Load(envFile string) (App, error) {
 		}
 	}
 	if envFile != "" {
-		if err := overlayFile(envFile, vars); err != nil {
+		if err := overlayFileOptional(envFile, vars); err != nil {
 			return App{}, err
 		}
 	}
 	return parse(vars)
 }
 
-func overlayFile(path string, vars map[string]string) error {
+func overlayFileOptional(path string, vars map[string]string) error {
 	f, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	defer f.Close()
+	return overlayScanner(f, vars)
+}
+
+func overlayScanner(f *os.File, vars map[string]string) error {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -78,6 +85,15 @@ func overlayFile(path string, vars map[string]string) error {
 		vars[k] = v
 	}
 	return sc.Err()
+}
+
+func overlayFile(path string, vars map[string]string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return overlayScanner(f, vars)
 }
 
 func parse(vars map[string]string) (App, error) {

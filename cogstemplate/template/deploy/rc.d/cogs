@@ -1,14 +1,39 @@
 #!/bin/sh
-# PROVIDE: cogs
+#
+# PROVIDE: cogs_app
 # REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# Install: cp cogs-app.rc /usr/local/etc/rc.d/cogs_app && chmod +x /usr/local/etc/rc.d/cogs_app
+# /etc/rc.conf: cogs_app_enable="YES"
 
 . /etc/rc.subr
 
-name="cogs"
-rcvar="cogs_enable"
+name="cogs_app"
+rcvar="${name}_enable"
 command="{{.Binary}}"
 command_args="serve -env {{.EnvFile}}"
-cogs_enable="${cogs_enable:-NO}"
+pidfile="/var/run/${name}.pid"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+
+cogs_app_start()
+{
+	echo -n " ${name} "
+	if [ -n "{{.WorkDir}}" ] && [ -d "{{.WorkDir}}" ]; then
+		cd "{{.WorkDir}}" || return 1
+	fi
+	/usr/sbin/daemon -p "${pidfile}" ${command} ${command_args}
+}
+
+cogs_app_stop()
+{
+	echo -n " ${name} "
+	if [ -f "${pidfile}" ]; then
+		kill "$(cat "${pidfile}")" 2>/dev/null || true
+		rm -f "${pidfile}"
+	fi
+}
 
 load_rc_config $name
 run_rc_command "$1"

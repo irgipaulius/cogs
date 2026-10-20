@@ -1,0 +1,14 @@
+.git
+.github
+**/.cogs
+**/.wrangler
+**/.env
+**/node_modules
+dist
+examples
+docs
+scripts
+tools
+cogs-framework-plan.md
+**/*.db
+**/*.db-*

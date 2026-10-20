@@ -1,0 +1,33 @@
+# Optional Docker runtime for the todo API (not a replacement for `cogs launch`).
+# From repo root: docker compose -f apps/todo/docker-compose.yml up --build
+# Cloudflare Tunnel/Pages: still provision with ./cogs launch todo on a host with Wrangler.
+
+services:
+  todo-api:
+    build:
+      context: ../..
+      dockerfile: apps/todo/Dockerfile
+    image: cogs-todo:local
+    ports:
+      - "${COGS_HOST_PORT:-18787}:18787"
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      COGS_LISTEN: 0.0.0.0:18787
+      COGS_ALLOW_PUBLIC_BIND: "1"
+      COGS_DB_PATH: /data/todo.db
+      COGS_OBS: ${COGS_OBS:-off}
+      COGS_SESSION_SECRET: ${COGS_SESSION_SECRET:-docker-dev-change-me}
+      COGS_PUBLIC_PAGE_ORIGIN: ${COGS_PUBLIC_PAGE_ORIGIN:-http://127.0.0.1:8788}
+      COGS_PUBLIC_API_URL: ${COGS_PUBLIC_API_URL:-http://127.0.0.1:18787}
+    volumes:
+      # Bind mount keeps your existing todos from native runs (./data/todo.db)
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18787/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

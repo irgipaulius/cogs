@@ -4,5 +4,9 @@
 *.db
 *.db-*
 .env
+.env.docker
 .DS_Store
 node_modules/
+cogs-app.rc
+cogs-app.service
+com.cogs.app.plist

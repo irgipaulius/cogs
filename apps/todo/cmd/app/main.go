@@ -26,14 +26,21 @@ import (
 )
 
 func main() {
-	envFile := flag.String("env", ".env", "env file")
-	flag.Parse()
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
 	}
+	cmd := os.Args[1]
+	if cmd == "version" {
+		fmt.Println("todo-app 0.1.0")
+		return
+	}
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	envFile := fs.String("env", ".env", "env file path (optional overlay; COGS_* env vars always apply)")
+	_ = fs.Parse(os.Args[2:])
+
 	ctx := context.Background()
-	switch os.Args[1] {
+	switch cmd {
 	case "serve":
 		if err := serve(ctx, *envFile); err != nil {
 			log.Fatal(err)
@@ -42,8 +49,6 @@ func main() {
 		if err := migrate(ctx, *envFile); err != nil {
 			log.Fatal(err)
 		}
-	case "version":
-		fmt.Println("todo-app 0.1.0")
 	default:
 		usage()
 		os.Exit(2)
