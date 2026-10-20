@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/irgipaulius/cogs/main/docs/cogs.workspace.schema.json",
+  "name": "cogs",
+  "apps": [
+    {
+      "name": "todo",
+      "path": "apps/todo",
+      "description": "Reference Cloudflare todo app (Pages UI + tunnel API + SQLite)"
+    }
+  ]
+}

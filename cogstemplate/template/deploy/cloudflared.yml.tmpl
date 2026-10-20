@@ -1,0 +1,8 @@
+# Public hostname tunnel (see docs/cloudflare-setup.md)
+tunnel: {{.TunnelID}}
+credentials-file: {{.CredentialsFile}}
+
+ingress:
+  - hostname: {{.Hostname}}
+    service: http://127.0.0.1:8080
+  - service: http_status:404

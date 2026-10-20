@@ -1,0 +1,13 @@
+{
+  "sets": [
+    {
+      "name": "items",
+      "table": "items",
+      "primary_key": "id",
+      "columns": ["val"],
+      "blob_column": "blob",
+      "d1_table": "items_edge",
+      "block_buckets": 512
+    }
+  ]
+}

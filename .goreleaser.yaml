@@ -1,0 +1,32 @@
+version: 2
+project_name: cogs
+builds:
+  - id: cogs
+    main: ./cmd/cogs
+    binary: cogs
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - freebsd
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+archives:
+  - formats: [tar.gz]
+    formats_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+release:
+  extra_files:
+    - glob: scripts/install.sh
+    - glob: scripts/install.ps1
+checksum:
+  name_template: checksums.txt
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"

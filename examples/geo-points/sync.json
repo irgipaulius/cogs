@@ -1,0 +1,12 @@
+{
+  "sets": [
+    {
+      "name": "points",
+      "table": "geo_points",
+      "primary_key": "id",
+      "columns": ["name", "lat", "lon"],
+      "blob_column": "payload",
+      "d1_table": "geo_points_edge"
+    }
+  ]
+}

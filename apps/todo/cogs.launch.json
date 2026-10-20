@@ -1,0 +1,12 @@
+{
+  "name": "todo-app",
+  "pages_dir": "public",
+  "page_subdomain": "todo",
+  "api_subdomain": "todo-api",
+  "port": 8080,
+  "d1_name": "cogs-todo-edge",
+  "r2_bucket": "cogs-todo-images",
+  "tunnel_name": "cogs-todo-app",
+  "pages_project": "cogs-todo-app",
+  "max_upload_bytes": 12582912
+}

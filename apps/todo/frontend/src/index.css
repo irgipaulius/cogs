@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-star-void text-white;
+  }
+
+  body {
+    @apply min-h-screen;
+    background:
+      radial-gradient(ellipse 120% 80% at 50% -20%, rgba(61, 90, 254, 0.18), transparent 55%),
+      radial-gradient(ellipse 80% 50% at 100% 50%, rgba(255, 255, 255, 0.04), transparent 45%),
+      #030508;
+  }
+}
+
+@layer components {
+  .star-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-star-mist/80;
+  }
+
+  .star-input {
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-[15px] text-white placeholder:text-white/35 outline-none transition focus:border-white/25 focus:bg-white/[0.06] focus:ring-2 focus:ring-star-glow/30;
+  }
+
+  .star-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white/90 transition hover:border-white/20 hover:bg-white/10 active:scale-[0.98];
+  }
+
+  .star-btn-primary {
+    @apply border-white/20 bg-white text-star-void hover:bg-white/90;
+  }
+
+  .star-card {
+    @apply rounded-2xl border border-white/[0.08] bg-star-panel/80 shadow-panel backdrop-blur-xl;
+  }
+}

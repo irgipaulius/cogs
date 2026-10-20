@@ -1,0 +1,11 @@
+{
+  "sets": [
+    {
+      "name": "todos",
+      "table": "todos",
+      "primary_key": "id",
+      "columns": ["client_id", "title", "done", "image_r2_key", "updated_at"],
+      "d1_table": "todos_edge"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/irgipaulius/cogs/main/docs/cogs.workspace.schema.json",
+  "title": "CoGS workspace",
+  "type": "object",
+  "required": ["name", "apps"],
+  "properties": {
+    "name": { "type": "string" },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

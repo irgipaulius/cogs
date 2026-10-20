@@ -1,0 +1,15 @@
+[Unit]
+Description=CoGS application
+After=network.target
+
+[Service]
+Type=simple
+User={{.User}}
+WorkingDirectory={{.WorkDir}}
+EnvironmentFile={{.EnvFile}}
+ExecStart={{.Binary}} serve -env {{.EnvFile}}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

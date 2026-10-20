@@ -1,0 +1,14 @@
+#!/bin/sh
+# PROVIDE: cogs
+# REQUIRE: NETWORKING
+
+. /etc/rc.subr
+
+name="cogs"
+rcvar="cogs_enable"
+command="{{.Binary}}"
+command_args="serve -env {{.EnvFile}}"
+cogs_enable="${cogs_enable:-NO}"
+
+load_rc_config $name
+run_rc_command "$1"

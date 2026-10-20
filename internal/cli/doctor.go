@@ -1,0 +1,49 @@
+package cli
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/irgipaulius/cogs/pkg/config"
+	"github.com/irgipaulius/cogs/pkg/sqliteopen"
+)
+
+func cmdDoctor(args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	envFile := fs.String("env", ".env", "env file")
+	_ = fs.Parse(args)
+
+	cfg, err := config.LoadRelaxed(*envFile)
+	if err != nil {
+		fmt.Println("config:", err)
+	} else {
+		fmt.Println("config: ok (relaxed)")
+		fmt.Println("  listen:", cfg.ListenAddr)
+		fmt.Println("  db:", cfg.DBPath)
+	}
+	if _, err := os.Stat(cfg.DBPath); err == nil {
+		p, err := sqliteopen.Open(sqliteopen.Config{Path: cfg.DBPath})
+		if err != nil {
+			fmt.Println("sqlite:", err)
+		} else {
+			mode, _ := sqliteopen.JournalMode(context.Background(), p.Reader)
+			fmt.Println("sqlite: journal_mode=", mode)
+			_ = p.Close()
+		}
+	}
+	if cfg.PublicAPIURL != "" {
+		fmt.Println("public API:", cfg.PublicAPIURL)
+	}
+	for _, bin := range []string{"wrangler", "cloudflared", "go", "npx"} {
+		path, err := exec.LookPath(bin)
+		if err != nil {
+			fmt.Println(bin + ": not found")
+		} else {
+			fmt.Println(bin+":", path)
+		}
+	}
+	return nil
+}
