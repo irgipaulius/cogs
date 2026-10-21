@@ -24,6 +24,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cogsminio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cogsminio-dev-change-me}
       MINIO_BUCKET: ${MINIO_BUCKET:-cogs-todo-blobs}
+      MINIO_BUCKET_GOLDILOCKS: ${MINIO_BUCKET_GOLDILOCKS:-cogs-goldilocks}
     entrypoint:
       - /bin/sh
       - -ec
@@ -31,6 +32,7 @@ services:
         sleep 4
         mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
         mc mb -p "local/$$MINIO_BUCKET" || true
+        mc mb -p "local/$$MINIO_BUCKET_GOLDILOCKS" || true
 
   todo-api:
     build:
@@ -108,6 +110,52 @@ services:
       timeout: 3s
       retries: 5
       start_period: 25s
+    restart: unless-stopped
+
+  goldilocks-api:
+    build:
+      context: .
+      dockerfile: apps/goldilocks/Dockerfile
+    image: cogs-goldilocks:local
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env.docker
+        required: false
+    ports:
+      - "${COGS_GOLDILOCKS_PORT:-18788}:18788"
+    environment:
+      COGS_LISTEN: 0.0.0.0:18788
+      COGS_ALLOW_PUBLIC_BIND: "1"
+      COGS_DB_PATH: /data/goldilocks.db
+      COGS_BLOB_STORE: minio
+      COGS_S3_ENDPOINT: http://minio:9000
+      COGS_S3_BUCKET: ${MINIO_BUCKET_GOLDILOCKS:-cogs-goldilocks}
+      COGS_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-cogsminio}
+      COGS_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-cogsminio-dev-change-me}
+      COGS_S3_PATH_STYLE: "true"
+      COGS_OBS: "off"
+      COGS_SESSION_SECRET: ${COGS_SESSION_SECRET:-docker-dev-change-me}
+      COGS_APP_NAME: goldilocks
+      COGS_TELEMETRY_PATH: /data/telemetry.json
+      COGS_PUBLIC_DIR: /app/public
+      COGS_SCRAPER_SCRIPT: /app/scripts/scrape_chunk.py
+      COGS_WORKDIR: /app
+      COGS_SEED_SQLITE: /seed/goldilocks.sqlite
+      COGS_AREAS_JSON: /app/public/data/areas.json
+      COGS_TC_PATH: /tc
+    volumes:
+      - ./apps/goldilocks/data:/data
+      - ./apps/goldilocks/.cogs/run:/run/cogs
+      - ${GOLDILOCKS_SEED_SQLITE:-./apps/goldilocks/seed/goldilocks.sqlite}:/seed/goldilocks.sqlite:ro
+      - /tmp/tc:/tc:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18788/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
 
 volumes:

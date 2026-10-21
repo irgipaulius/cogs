@@ -1,0 +1,13 @@
+{
+  "name": "goldilocks",
+  "pages_dir": "public",
+  "page_subdomain": "goldilocks",
+  "api_subdomain": "goldilocks-api",
+  "bind_host": "127.0.0.1",
+  "port": 18788,
+  "d1_name": "cogs-goldilocks-edge",
+  "r2_bucket": "cogs-goldilocks-tiles",
+  "tunnel_name": "cogs-goldilocks",
+  "pages_project": "cogs-goldilocks",
+  "max_upload_bytes": 52428800
+}

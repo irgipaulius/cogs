@@ -17,6 +17,11 @@
       "name": "todo",
       "path": "apps/todo",
       "description": "Reference Cloudflare todo app (Pages UI + tunnel API + SQLite)"
+    },
+    {
+      "name": "goldilocks",
+      "path": "apps/goldilocks",
+      "description": "Goldilocks climate map (SQLite cells, baked tiles, background scraper)"
     }
   ]
 }

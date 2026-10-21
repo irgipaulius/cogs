@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+data/*
+!.gitkeep
+.cogs/
+public/config.js
+seed/*.sqlite
+tc/
