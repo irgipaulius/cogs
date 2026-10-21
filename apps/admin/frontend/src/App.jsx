@@ -249,6 +249,14 @@ export default function App() {
     alert('Redeploy triggered — check deploy history');
   }
 
+  async function rollback(name) {
+    if (!confirm(`Roll back ${name} to the previous backend release?`)) return;
+    await api('/api/rollback', { method: 'POST', body: JSON.stringify({ app: name }) });
+    alert('Rollback complete');
+  }
+
+  const deployEvents = board?.deploy_events || [];
+
   async function runSQL(name, write) {
     const db = dbForApp(name);
     if (!db) {
@@ -376,6 +384,7 @@ export default function App() {
         {panel === 'apps' && (
           <>
             <PageHeader title="Apps" subtitle="Workspace services and runtime health" />
+            {me.is_root && <GitHubAndAddApp api={api} onAdded={() => api('/api/metrics/latest').then(setBoard)} />}
             <div className="app-grid">
               {appsList.map((name) => {
                 const m = appMetrics(name);
@@ -405,6 +414,9 @@ export default function App() {
                       </span>
                     </div>
                     {meta.public_url && <p className="url">{meta.public_url}</p>}
+                    {meta.deploy_mode && <p className="muted">Mode {meta.deploy_mode}</p>}
+                    {meta.last_status && <p className="muted">Deploy {meta.last_status}</p>}
+                    {meta.last_error && <p className="err">{meta.last_error.slice(0, 80)}</p>}
                     {meta.deploy_count > 0 && meta.last_deploy_at && (
                       <p className="muted">Last deploy {new Date(meta.last_deploy_at).toLocaleString()}</p>
                     )}
@@ -425,6 +437,8 @@ export default function App() {
             api={api}
             me={me}
             redeploy={redeploy}
+            rollback={rollback}
+            deployEvents={deployEvents}
             sqlText={sqlText}
             setSqlText={setSqlText}
             tables={tables}
@@ -550,5 +564,132 @@ function CreateUserForm({ onCreated, apps }) {
         Create
       </button>
     </form>
+  );
+}
+
+function GitHubAndAddApp({ api, onAdded }) {
+  const [gh, setGh] = useState(null);
+  const [flow, setFlow] = useState(null);
+  const [repos, setRepos] = useState([]);
+  const [name, setName] = useState('');
+  const [repo, setRepo] = useState('');
+  const [mode, setMode] = useState('push');
+  const [subdomain, setSubdomain] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api('/api/github/status')
+      .then(setGh)
+      .catch(() => setGh({ signed_in: false }));
+  }, [api]);
+
+  useEffect(() => {
+    if (!gh?.signed_in) return;
+    api('/api/github/repos')
+      .then(setRepos)
+      .catch(() => setRepos([]));
+  }, [gh, api]);
+
+  useEffect(() => {
+    if (!flow?.device_code) return;
+    const t = setInterval(async () => {
+      try {
+        const st = await api('/api/github/login/poll', {
+          method: 'POST',
+          body: JSON.stringify({ device_code: flow.device_code }),
+        });
+        if (st.signed_in) {
+          setFlow(null);
+          setGh(st);
+        }
+      } catch {
+        /* still pending */
+      }
+    }, (flow.interval || 5) * 1000);
+    return () => clearInterval(t);
+  }, [flow, api]);
+
+  async function startLogin() {
+    setErr('');
+    const start = await api('/api/github/login/start', { method: 'POST', body: '{}' });
+    setFlow(start);
+  }
+
+  async function addApp(e) {
+    e.preventDefault();
+    setErr('');
+    try {
+      await api('/api/apps', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          repo,
+          deploy_mode: mode,
+          page_subdomain: subdomain || name,
+        }),
+      });
+      onAdded?.();
+      setName('');
+      setRepo('');
+    } catch (ex) {
+      setErr(String(ex.message || ex));
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <h3>GitHub &amp; new app</h3>
+      {err && <div className="err">{err}</div>}
+      {!gh?.signed_in ? (
+        <div>
+          {flow ? (
+            <p>
+              Open{' '}
+              <a href={flow.verification_uri} target="_blank" rel="noreferrer">
+                {flow.verification_uri}
+              </a>{' '}
+              and enter code <strong>{flow.user_code}</strong>
+            </p>
+          ) : (
+            <button type="button" className="btn btn-primary" onClick={startLogin}>
+              Login with GitHub
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="muted">Signed in as {gh.login || 'GitHub user'}</p>
+      )}
+      <form className="stack" onSubmit={addApp}>
+        <label>
+          App id
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label>
+          Repository
+          <select value={repo} onChange={(e) => setRepo(e.target.value)} required>
+            <option value="">Select repo…</option>
+            {repos.map((r) => (
+              <option key={r.id} value={r.full_name}>
+                {r.full_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Deploy mode
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="push">push (CoGS builds UI)</option>
+            <option value="pull">pull (Workers Builds UI)</option>
+          </select>
+        </label>
+        <label>
+          UI subdomain
+          <input value={subdomain} onChange={(e) => setSubdomain(e.target.value)} placeholder="defaults to app id" />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={!gh?.signed_in}>
+          Add app
+        </button>
+      </form>
+    </div>
   );
 }

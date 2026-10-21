@@ -41,6 +41,12 @@ func Run(args []string) error {
 		return cmdRestoreTest(args[1:])
 	case "doctor":
 		return cmdDoctor(args[1:])
+	case "up":
+		return cmdUp(args[1:])
+	case "down":
+		return cmdDown(args[1:])
+	case "github":
+		return cmdGitHub(args[1:])
 	case "cf":
 		return cmdCF(args[1:])
 	case "admin":
@@ -76,6 +82,7 @@ Usage:
   cogs build [--target os/arch,...]
   cogs launch [app|path] [-y] [--quick]   provision or fast redeploy
   cogs redeploy [app|path]            launch --quick -y
+  cogs github login|status|logout     workspace GitHub token (device flow)
   cogs <app|path>                     launch when path or workspace app name resolves
   cogs deploy [--app NAME]... [--ping] [--dry-run]
               deploy all apps (claims runner, drops stale tunnel connectors)
@@ -92,7 +99,9 @@ Usage:
   cogs restore-test <backup.db>
   cogs admin init|check           public dashboard bootstrap
   cogs supervisor run             control plane (unix socket)
-  cogs doctor [-env .env]
+  cogs doctor                     check zone, DNS token, tunnels, ports, go.work, config.js
+  cogs up [--foreground]          supervise apps and tunnels; writes .cogs/boot/cogs-up.sh
+  cogs down                       stop the apps and tunnels cogs up started
   cogs cf whoami | r2 | d1 | pages | worker | kv ...
   cogs version
 

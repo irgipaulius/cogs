@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
+	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/release"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func appRunDir(projectDir string) string {
@@ -54,6 +57,15 @@ func stopApp(projectDir string) {
 }
 
 func startAppBackground(projectDir string) error {
+	return startAppProcess(projectDir, true)
+}
+
+// ensureAppRunning starts the built binary when it is down. It rebuilds only if the binary is missing.
+func ensureAppRunning(projectDir string) error {
+	return startAppProcess(projectDir, false)
+}
+
+func startAppProcess(projectDir string, rebuild bool) error {
 	if pid, ok := appRunning(projectDir); ok {
 		ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API already running pid %d", pid))
 		return nil
@@ -67,11 +79,12 @@ func startAppBackground(projectDir string) error {
 	if err != nil {
 		return err
 	}
-	cmd, err := appServeCmd(projectDir)
+	bin, err := appBinary(projectDir, rebuild)
 	if err != nil {
 		logFile.Close()
 		return err
 	}
+	cmd := exec.Command(bin, "serve", "-env", ".env")
 	cmd.Dir = projectDir
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
@@ -89,21 +102,34 @@ func startAppBackground(projectDir string) error {
 	return nil
 }
 
-// appServeCmd builds a stable binary and serves it. go run recompiles on every
-// start and lands in a temp dir, which fails the supervisor path check.
-func appServeCmd(projectDir string) (*exec.Cmd, error) {
-	bin, err := buildAppBinary(projectDir)
-	if err != nil {
-		return nil, err
+func appBinary(projectDir string, rebuild bool) (string, error) {
+	combined := false
+	if m, err := launch.Load(projectDir); err == nil {
+		combined = m.IsCombined()
 	}
-	return exec.Command(bin, "serve", "-env", ".env"), nil
+	if wsRoot, ws, err := workspace.FindRoot(projectDir); err == nil {
+		appID := workspace.CanonicalID(wsRoot, ws, projectDir)
+		if p, ok := release.CurrentBinary(wsRoot, appID, combined); ok && !rebuild {
+			return p, nil
+		}
+	}
+	out := appBinaryPath(projectDir)
+	if !rebuild {
+		if st, err := os.Stat(out); err == nil && !st.IsDir() {
+			return out, nil
+		}
+	}
+	return buildAppBinary(projectDir)
 }
 
 func appBinaryPath(projectDir string) string {
-	name := "cogs-app"
-	if m, err := launch.Load(projectDir); err == nil && m.IsCombined() {
-		name = "cogs-admin"
+	combined := false
+	if app, err := appcfg.Load(projectDir); err == nil {
+		combined = app.Kind == "combined"
+	} else if m, err := launch.Load(projectDir); err == nil {
+		combined = m.IsCombined()
 	}
+	name := release.BinaryName(combined)
 	return filepath.Join(appRunDir(projectDir), name)
 }
 

@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/release"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -27,6 +29,17 @@ func enrichDeployMetaFromLaunch(wsRoot string, ws workspace.Root, meta map[strin
 		}
 		if cur.TunnelName == "" {
 			cur.TunnelName = m.TunnelName
+		}
+		if app, err := appcfg.Load(dir); err == nil {
+			if cur.DeployMode == "" {
+				cur.DeployMode = app.DeployMode
+			}
+		}
+		if commit, _ := release.ReadCurrent(wsRoot, a.Name); commit != "" {
+			if len(commit) > 7 {
+				commit = commit[:7]
+			}
+			cur.GitCommit = commit
 		}
 		if zone != "" {
 			if cur.PublicURL == "" && m.PageSubdomain != "" {

@@ -31,6 +31,18 @@ type whoamiJSON struct {
 	} `json:"accounts"`
 }
 
+// onlyCloudflareZone returns the sole zone on the account. More than one zone needs cogs.app.toml.
+func onlyCloudflareZone() (string, error) {
+	zones, err := fetchCloudflareZones()
+	if err != nil {
+		return "", err
+	}
+	if len(zones) != 1 {
+		return "", fmt.Errorf("found %d Cloudflare zones", len(zones))
+	}
+	return zones[0].Name, nil
+}
+
 // pickCloudflareZone lists zones on the account and lets the user choose.
 func pickCloudflareZone() (string, error) {
 	fmt.Print(`

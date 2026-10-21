@@ -1,0 +1,19 @@
+# Goldilocks: pull mode — Workers Builds ships the UI; CoGS deploys the backend on build events.
+name = "goldilocks"
+kind = "split"
+zone = "hyperreader.eu"
+pages_dir = "public"
+page_subdomain = "goldilocks"
+api_subdomain = "goldilocks-api"
+bind_host = "127.0.0.1"
+port = 18788
+d1_name = "cogs-goldilocks-edge"
+r2_bucket = "cogs-goldilocks-tiles"
+tunnel_name = "cogs-goldilocks"
+pages_project = "cogs-goldilocks"
+worker_name = "cogs-goldilocks"
+deploy_mode = "pull"
+deploy_branch = "main"
+git_repo = "irgipaulius/cogs"
+root_directory = "apps/goldilocks"
+max_upload_bytes = 52428800

@@ -3,8 +3,11 @@ package launch
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/irgipaulius/cogs/pkg/appcfg"
 )
 
 const DefaultFilename = "cogs.launch.json"
@@ -28,6 +31,13 @@ type Manifest struct {
 	Attachments bool `json:"attachments,omitempty"`
 	// BlobKeyPrefix is the object key prefix under the blob store (e.g. todo-images).
 	BlobKeyPrefix string `json:"blob_key_prefix,omitempty"`
+	// Zone is the Cloudflare apex (example.com). Set in cogs.app.toml to skip the zone prompt.
+	Zone string `json:"zone,omitempty"`
+	DeployMode    string `json:"deploy_mode,omitempty"`
+	DeployBranch  string `json:"deploy_branch,omitempty"`
+	GitRepo       string `json:"git_repo,omitempty"`
+	WorkerName    string `json:"worker_name,omitempty"`
+	RootDirectory string `json:"root_directory,omitempty"`
 }
 
 // IsCombined is true for apps like admin (no separate Pages project).
@@ -35,8 +45,36 @@ func (m Manifest) IsCombined() bool {
 	return m.Kind == "combined"
 }
 
-// Load reads cogs.launch.json from dir.
+// Load prefers cogs.app.toml, then cogs.launch.json.
 func Load(dir string) (Manifest, error) {
+	if app, err := appcfg.Load(dir); err == nil {
+		m := Manifest{
+			Name:           app.Name,
+			Kind:           app.KindManifest(),
+			Zone:           app.Zone,
+			PagesDir:       app.PagesDir,
+			PageSubdomain:  app.PageSubdomain,
+			APISubdomain:   app.APISubdomain,
+			BindHost:       app.BindHost,
+			Port:           app.Port,
+			D1Name:         app.D1Name,
+			R2Bucket:       app.R2Bucket,
+			TunnelName:     app.TunnelName,
+			PagesProject:   app.PagesProject,
+			MaxUploadBytes: app.MaxUploadBytes,
+			Attachments:    app.Attachments,
+			BlobKeyPrefix:  app.BlobKeyPrefix,
+			DeployMode:     app.DeployMode,
+			DeployBranch:   app.DeployBranch,
+			GitRepo:        app.GitRepo,
+			WorkerName:     app.WorkerName,
+			RootDirectory:  app.RootDirectory,
+		}
+		m.applyDefaults()
+		return m, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Manifest{}, err
+	}
 	path := filepath.Join(dir, DefaultFilename)
 	b, err := os.ReadFile(path)
 	if err != nil {

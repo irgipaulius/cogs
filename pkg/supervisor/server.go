@@ -189,6 +189,65 @@ func (s *Server) dispatch(ctx context.Context, req Request) Response {
 		}
 		_ = s.Store.WriteAudit(ctx, user, "redeploy", req.App+": "+truncate(detail, 500))
 		return Response{OK: true, Data: encodeResponse(map[string]string{"detail": detail})}
+	case "rollback":
+		if !user.HasPermission(req.App, adminstore.PermRedeploy) {
+			return Response{OK: false, Error: "denied"}
+		}
+		detail, err := rollbackApp(ctx, s.Registry.WorkspaceRoot, req.App)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		_ = s.Store.WriteAudit(ctx, user, "rollback", req.App+": "+truncate(detail, 200))
+		return Response{OK: true, Data: encodeResponse(map[string]string{"detail": detail})}
+	case "deploy_status":
+		data, err := deployStatus(s.Registry.WorkspaceRoot)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		return Response{OK: true, Data: data}
+	case "github_status":
+		return Response{OK: true, Data: githubStatus(s.Registry.WorkspaceRoot)}
+	case "github_login_start":
+		if !user.IsRoot {
+			return Response{OK: false, Error: "denied"}
+		}
+		data, err := githubDeviceStart(s.Registry.WorkspaceRoot)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		return Response{OK: true, Data: data}
+	case "github_login_poll":
+		if !user.IsRoot {
+			return Response{OK: false, Error: "denied"}
+		}
+		var body struct {
+			DeviceCode string `json:"device_code"`
+		}
+		_ = json.Unmarshal(req.Raw, &body)
+		data, err := githubDevicePoll(s.Registry.WorkspaceRoot, body.DeviceCode)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		return Response{OK: true, Data: data}
+	case "github_repos":
+		if !user.IsRoot {
+			return Response{OK: false, Error: "denied"}
+		}
+		data, err := githubRepos(s.Registry.WorkspaceRoot)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		return Response{OK: true, Data: data}
+	case "add_app":
+		if !user.IsRoot {
+			return Response{OK: false, Error: "denied"}
+		}
+		detail, err := addAppFromRequest(ctx, s.Registry.WorkspaceRoot, req.Raw)
+		if err != nil {
+			return Response{OK: false, Error: err.Error()}
+		}
+		_ = s.Store.WriteAudit(ctx, user, "add_app", detail)
+		return Response{OK: true, Data: encodeResponse(map[string]string{"detail": detail})}
 	case "ping":
 		return Response{OK: true, Data: encodeResponse(map[string]string{"status": "ok"})}
 	default:

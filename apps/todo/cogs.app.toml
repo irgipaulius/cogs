@@ -1,0 +1,20 @@
+# Source of truth for the todo app. cogs launch, doctor, and up read this file.
+name = "todo"
+kind = "split"
+zone = "hyperreader.eu"
+pages_dir = "public"
+page_subdomain = "todo"
+api_subdomain = "todo-api"
+bind_host = "127.0.0.1"
+port = 18787
+d1_name = "cogs-todo-edge"
+r2_bucket = "cogs-todo-images"
+tunnel_name = "cogs-todo-app"
+pages_project = "cogs-todo-app"
+worker_name = "cogs-todo-app"
+deploy_mode = "push"
+deploy_branch = "main"
+git_repo = "irgipaulius/cogs"
+max_upload_bytes = 12582912
+attachments = true
+blob_key_prefix = "todo-images"

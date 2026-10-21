@@ -1,15 +1,17 @@
 # Todo app (CoGS reference)
 
-End-to-end demo: **Pages UI** → **Cloudflare Tunnel** → **Go + SQLite on your host**, with **localStorage offline queue**, **R2 image uploads**, link perf stats, and stress controls.
+End-to-end demo: **Worker static UI** → **Cloudflare Tunnel** → **Go + SQLite on your host**, with **localStorage offline queue**, **R2 image uploads**, link perf stats, and stress controls.
+
+Config: **`cogs.app.toml`** (`name = "todo"`, `deploy_mode = "push"`). See [docs/deploy.md](../../docs/deploy.md).
 
 ## One command (from repo root)
 
 ```bash
 ./cogs launch todo -y          # first-time / full provisioning
-./cogs redeploy todo           # fast: UI build, Pages, migrate, serve
+./cogs redeploy todo           # fast: UI build, Worker assets, backend release, migrate
 ```
 
-`launch` runs **npm build** (when `frontend/` exists), **migrate**, **Pages deploy**, **tunnel + DNS**, then starts the API. Re-runs reuse hostnames from `.env` unless you pass `--pick-zone`.
+`launch` runs **npm build** (when `frontend/` exists), **migrate**, **Worker static assets deploy**, **tunnel + DNS**, then starts the API (or writes a release under `.cogs/releases/todo/` on redeploy). Re-runs reuse hostnames from `.env` unless you pass `--pick-zone`.
 
 Local UI dev only: `cd frontend && npm run dev` (API on `:8080`).
 
@@ -25,9 +27,9 @@ What `cogs launch` does:
 2. Lists **Cloudflare zones** on your account (apex domains like `example.com`) or lets you type one — you need a site added under **Websites** in the dashboard first  
 3. Creates **D1** + **R2** (idempotent)  
 4. Creates **tunnel** + **ingress** + **DNS CNAMEs** for `todo-api.<domain>` and `todo.<domain>`  
-5. Deploys **Pages** from `public/` to `todo.<domain>` (and `*.pages.dev`)  
+5. Deploys **Worker static assets** from `public/` to `todo.<domain>`  
 
-**Architecture:** the UI is served from **Pages** (`todo.<domain>`). The browser talks to the **API** on `todo-api.<domain>`, which is the only hostname that uses the **tunnel** to your machine. Both hostnames need DNS CNAMEs — `cogs launch` creates them after you supply a **Zone DNS Edit** API token (Wrangler login alone is not enough). Token is saved as `COGS_CF_API_TOKEN` in `.env`.
+**Architecture:** the UI is served from a **Worker** (`todo.<domain>`). The browser talks to the **API** on `todo-api.<domain>`, which uses the **tunnel** to your machine. Both hostnames need DNS — `cogs launch` creates them after you supply a **Zone DNS Edit** token (workspace `.cogs/cloudflare/` or `COGS_CF_API_TOKEN`).
 6. Writes **`.env`**, runs **migrate**, starts **`app serve`**
 
 `cogs launch` starts the tunnel in the **background** automatically (`npx wrangler`, no global install).

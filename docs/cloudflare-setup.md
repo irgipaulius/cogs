@@ -30,6 +30,22 @@ cogs cf r2 create cogs-data
 
 Copy IDs into `.env`. Push data with `cogs sync`, not raw SQL dumps, for incremental updates.
 
+## Split-app UI (Workers static assets)
+
+CoGS deploys split-app frontends as **assets-only Workers** (no `main` script) via `cogs launch` / `cogs redeploy` in **push** mode. Custom hostname + DNS are managed like tunnel records (see launch output).
+
+## Pull mode (Workers Builds)
+
+For **`deploy_mode = pull`** apps (e.g. goldilocks):
+
+1. Install the **Cloudflare GitHub App** once: dashboard → Workers & Pages → Builds → Connect (the API cannot install it).
+2. `cogs github login` and set **`COGS_GITHUB_CLIENT_ID`**.
+3. `cogs launch <app> -y` creates repo connection + build trigger.
+4. Create a queue (e.g. `cogs-deploys`) and subscribe to **`workersBuilds.worker`** events `build.succeeded` / `build.failed`.
+5. Set **`COGS_DEPLOY_QUEUE_ID`** where **`cogs up`** runs.
+
+Full steps: [deploy.md](deploy.md).
+
 ## Private Worker → origin
 
 See [Workers VPC private API](https://developers.cloudflare.com/workers-vpc/examples/private-api/) and `cogs tunnel private`.

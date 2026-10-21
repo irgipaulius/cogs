@@ -9,8 +9,10 @@ CoGS (**C**loudflare + **G**o + **S**QLite) is a forkable boilerplate for self-h
 3. **Configure**: `cd myapp && cp .env.example .env` — set `COGS_SESSION_SECRET`.
 4. **Run**: `go run ./cmd/app serve -env .env` → `curl http://127.0.0.1:8080/health`
 5. **Try the todo demo**: `./cogs launch todo -y` from repo root (Wrangler login + DNS token prompt)
-6. **Build static binary**: `cogs build --target linux/amd64`
-6. **Expose** (pick one):
+6. **Ship changes**: `./cogs redeploy todo` (Worker UI + backend release)
+7. **Host supervisor (prod loop)**: `cogs up` — see [deploy.md](deploy.md)
+8. **Build static binary**: `cogs build --target linux/amd64`
+9. **Expose** (pick one):
    - Public: `cogs tunnel init api.example.com` + [cloudflare-setup.md](cloudflare-setup.md)
    - Worker-only: `cogs tunnel private` + [worker-client example](../examples/worker-client)
 

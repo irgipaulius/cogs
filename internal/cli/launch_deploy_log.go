@@ -5,19 +5,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func recordLaunchDeploy(wsRoot, projectDir, action string, m launch.Manifest, pageHost, apiHost string) {
-	ev := cockpit.DeployEvent{
-		App:    filepath.Base(projectDir),
-		Action: action,
-		Tunnel: m.TunnelName,
-		Pages:  m.PagesProject,
+	appID := filepath.Base(projectDir)
+	if wsRoot != "" {
+		if _, ws, err := workspace.FindRoot(projectDir); err == nil {
+			appID = workspace.CanonicalID(wsRoot, ws, projectDir)
+		}
 	}
-	if m.Name != "" {
-		ev.App = m.Name
+	ev := cockpit.DeployEvent{
+		App: appID, Action: action, Status: "succeeded",
+		Tunnel: m.TunnelName, Pages: m.PagesProject, Mode: m.DeployMode,
+	}
+	if ev.Mode == "" {
+		if app, err := appcfg.Load(projectDir); err == nil {
+			ev.Mode = app.DeployMode
+		}
 	}
 	if m.IsCombined() {
 		ev.Host = pageHost

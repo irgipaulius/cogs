@@ -2,18 +2,18 @@
 
 CoGS defaults to **native deploy**: `./cogs launch`, `cogs deploy`, systemd on FreeBSD/Linux, SQLite on a host volume. Docker is an **optional runtime** for the API process—mainly Linux hosts and CI.
 
-Cloudflare **Pages, Tunnel, and DNS** are still provisioned with the **`cogs` CLI** on a machine where you can run Wrangler (laptop, CI, or admin box). The container runs **migrate + serve** only.
+Cloudflare **Workers (UI), Tunnel, and DNS** are still provisioned with the **`cogs` CLI** on a machine where you can run Wrangler (laptop, CI, or admin box). The container typically runs **`cogs up --foreground`** (supervisor + apps) or **migrate + serve** only for a single API image.
 
 ## Workspace stack (todo + admin)
 
 From the **repo root**, run todo and the public admin dashboard together:
 
 ```bash
-cp .env.docker.example .env.docker   # admin login + **CORS** (`COGS_PUBLIC_PAGE_ORIGIN` for Pages → API)
+cp .env.docker.example .env.docker   # admin login + **CORS** (`COGS_PUBLIC_PAGE_ORIGIN` = public UI origin → API)
 docker compose up --build -d
 ```
 
-If the todo UI on Cloudflare Pages gets **CORS / Failed to fetch**, the API container is missing `COGS_PUBLIC_PAGE_ORIGIN` (must match `https://todo.<zone>`). Set it in `.env.docker` and `docker compose up -d todo-api --force-recreate`.
+If the todo UI on Cloudflare (Worker hostname) gets **CORS / Failed to fetch**, the API container is missing `COGS_PUBLIC_PAGE_ORIGIN` (must match `https://todo.<zone>`). Set it in `.env.docker` and `docker compose up -d todo-api --force-recreate`.
 
 - **Admin UI**: http://127.0.0.1:18786 — default login `admin` / `CogsAdmin-Docker-2026!` (change in `.env.docker`).
 - **Todo API**: http://127.0.0.1:18787/health
@@ -52,7 +52,7 @@ docker compose -f docker-compose.yml up --build
 
 Typical pattern:
 
-1. Run **`cogs launch todo`** once to create tunnel + DNS + Pages.
+1. Run **`cogs launch todo`** once to create tunnel + DNS + Worker UI.
 2. Run the API in Docker on the same host (or another host that can reach the tunnel target).
 3. Point tunnel ingress at **`http://127.0.0.1:18787`** (or the host port you publish).
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/config"
 	"github.com/irgipaulius/cogs/pkg/sqliteopen"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func cmdDoctor(args []string) error {
@@ -16,7 +17,22 @@ func cmdDoctor(args []string) error {
 	envFile := fs.String("env", ".env", "env file")
 	_ = fs.Parse(args)
 
-	cfg, err := config.LoadRelaxed(*envFile)
+	wd, err := os.Getwd()
+	if err == nil {
+		if root, ws, err := workspace.FindRoot(wd); err == nil && len(ws.Apps) > 0 {
+			code := printDoctor(doctorWorkspace(root, ws))
+			if code != 0 {
+				return fmt.Errorf("doctor found problems")
+			}
+			return nil
+		}
+	}
+
+	return doctorSingle(*envFile)
+}
+
+func doctorSingle(envFile string) error {
+	cfg, err := config.LoadRelaxed(envFile)
 	if err != nil {
 		fmt.Println("config:", err)
 	} else {

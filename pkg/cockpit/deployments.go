@@ -11,13 +11,16 @@ import (
 type DeployEvent struct {
 	At       time.Time `json:"at"`
 	App      string    `json:"app"`
-	Action   string    `json:"action"` // launch, redeploy, quick
+	Action   string    `json:"action"` // launch, redeploy, quick, rollback, pull_build
+	Mode     string    `json:"mode,omitempty"`   // push, pull
+	Status   string    `json:"status,omitempty"` // running, succeeded, failed
 	Host     string    `json:"host,omitempty"`
 	Tunnel   string    `json:"tunnel,omitempty"`
 	Pages    string    `json:"pages,omitempty"`
 	GitRemote string   `json:"git_remote,omitempty"`
 	GitBranch string   `json:"git_branch,omitempty"`
 	GitCommit string   `json:"git_commit,omitempty"`
+	LastError string   `json:"last_error,omitempty"`
 	By       string    `json:"by,omitempty"`
 	Detail   string    `json:"detail,omitempty"`
 }
@@ -34,6 +37,9 @@ type AppMeta struct {
 	GitRemote     string    `json:"git_remote,omitempty"`
 	GitBranch     string    `json:"git_branch,omitempty"`
 	GitCommit     string    `json:"git_commit,omitempty"`
+	DeployMode    string    `json:"deploy_mode,omitempty"`
+	LastStatus    string    `json:"last_status,omitempty"`
+	LastError     string    `json:"last_error,omitempty"`
 }
 
 type deployFile struct {
@@ -67,11 +73,24 @@ func RecordDeploy(wsRoot string, ev DeployEvent) error {
 	}
 	m := df.Meta[ev.App]
 	m.App = ev.App
-	m.LastDeployAt = ev.At
-	m.DeployCount++
+	if ev.Status != "running" {
+		m.LastDeployAt = ev.At
+		m.DeployCount++
+	}
 	m.GitRemote = ev.GitRemote
 	m.GitBranch = ev.GitBranch
 	m.GitCommit = ev.GitCommit
+	if ev.Mode != "" {
+		m.DeployMode = ev.Mode
+	}
+	if ev.Status != "" {
+		m.LastStatus = ev.Status
+	}
+	if ev.Status == "failed" {
+		m.LastError = ev.Detail
+	} else if ev.LastError != "" {
+		m.LastError = ev.LastError
+	}
 	if ev.Host != "" {
 		m.PublicURL = "https://" + ev.Host
 	}

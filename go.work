@@ -6,4 +6,5 @@ use (
 	.
 	./apps/admin
 	./apps/todo
+	./apps/goldilocks
 )

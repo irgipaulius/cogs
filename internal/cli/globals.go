@@ -14,6 +14,7 @@ type GlobalOpts struct {
 	Quiet   bool
 	Verbose bool
 	NoColor bool
+	Yes     bool // -y / --yes: never prompt
 }
 
 var globals GlobalOpts
@@ -33,6 +34,8 @@ func peelGlobalFlags(args []string) []string {
 			globals.Verbose = true
 		case a == "--no-color":
 			globals.NoColor = true
+		case a == "-y", a == "--yes":
+			globals.Yes = true
 		case strings.HasPrefix(a, "--app="):
 			// consumed by subcommands that scan args; keep in rest
 			rest = append(rest, a)

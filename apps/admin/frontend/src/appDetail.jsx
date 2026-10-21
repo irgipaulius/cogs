@@ -107,6 +107,8 @@ export function AppDetailView({
   api,
   me,
   redeploy,
+  rollback,
+  deployEvents,
   sqlText,
   setSqlText,
   tables,
@@ -211,13 +213,46 @@ export function AppDetailView({
       {tab === 'hosting' && (
         <div className="card">
           <h3>Hosting</h3>
+          <dl className="deploy-dl">
+            <dt>Deploy mode</dt>
+            <dd>{meta.deploy_mode || 'push'}</dd>
+            <dt>Commit</dt>
+            <dd>{meta.git_commit || '—'}</dd>
+            <dt>Last status</dt>
+            <dd>{meta.last_status || '—'}</dd>
+            {meta.last_error && (
+              <>
+                <dt>Last error</dt>
+                <dd className="err">{meta.last_error}</dd>
+              </>
+            )}
+          </dl>
+          {meta.deploy_mode === 'pull' && (
+            <p className="muted">
+              Pull mode: Cloudflare builds the UI first; keep API changes backward compatible until the backend deploy finishes.
+            </p>
+          )}
           <pre className="meta">
             {JSON.stringify({ ...meta, runtime: metrics }, null, 2)}
           </pre>
+          {(deployEvents || [])
+            .filter((e) => e.app === app)
+            .slice(0, 8)
+            .map((e, i) => (
+              <div key={i} className="deploy-line muted">
+                {e.at} · {e.action} · {e.status || '—'} · {e.git_commit || ''}{' '}
+                {e.detail ? `— ${e.detail.slice(0, 120)}` : ''}
+              </div>
+            ))}
           {canRedeploy && (
-            <button type="button" className="btn btn-primary" onClick={() => redeploy(app)}>
-              Redeploy
-            </button>
+            <div className="btn-row">
+              <button type="button" className="btn btn-primary" onClick={() => redeploy(app)}>
+                Redeploy
+              </button>
+              <button type="button" className="btn" onClick={() => rollback(app)}>
+                Rollback
+              </button>
+            </div>
           )}
         </div>
       )}

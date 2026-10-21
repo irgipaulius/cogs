@@ -37,6 +37,12 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("GET /api/sql/tables", s.auth(s.handleSQLTables))
 	mux.HandleFunc("POST /api/sql", s.auth(s.handleSQL))
 	mux.HandleFunc("POST /api/redeploy", s.auth(s.handleRedeploy))
+	mux.HandleFunc("POST /api/rollback", s.auth(s.handleRollback))
+	mux.HandleFunc("GET /api/github/status", s.auth(s.handleGitHubStatus))
+	mux.HandleFunc("POST /api/github/login/start", s.auth(s.handleGitHubLoginStart))
+	mux.HandleFunc("POST /api/github/login/poll", s.auth(s.handleGitHubLoginPoll))
+	mux.HandleFunc("GET /api/github/repos", s.auth(s.handleGitHubRepos))
+	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
 	mux.HandleFunc("GET /api/users", s.auth(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.auth(s.handleCreateUser))
 	mux.HandleFunc("PUT /api/users/{id}/grants", s.auth(s.handleSetGrants))
@@ -230,6 +236,109 @@ func (s *Server) handleSQL(w http.ResponseWriter, r *http.Request, user *adminst
 		Op: "sql", Session: sessionFromRequest(r),
 		DBID: body.DBID, App: body.App, SQL: body.SQL, Write: body.Write,
 	})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	var body struct {
+		App string `json:"app"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	resp, err := s.supCall(supervisor.Request{
+		Op: "rollback", Session: sessionFromRequest(r), App: body.App,
+	})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	_ = s.Store.WriteAudit(r.Context(), user, "rollback", body.App)
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleGitHubStatus(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	if !user.IsRoot {
+		http.Error(w, "denied", http.StatusForbidden)
+		return
+	}
+	resp, err := s.supCall(supervisor.Request{Op: "github_status", Session: sessionFromRequest(r)})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleGitHubLoginStart(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	if !user.IsRoot {
+		http.Error(w, "denied", http.StatusForbidden)
+		return
+	}
+	resp, err := s.supCall(supervisor.Request{Op: "github_login_start", Session: sessionFromRequest(r)})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleGitHubLoginPoll(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	if !user.IsRoot {
+		http.Error(w, "denied", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		DeviceCode string `json:"device_code"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	raw, _ := json.Marshal(body)
+	resp, err := s.supCall(supervisor.Request{
+		Op: "github_login_poll", Session: sessionFromRequest(r), Raw: raw,
+	})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleGitHubRepos(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	if !user.IsRoot {
+		http.Error(w, "denied", http.StatusForbidden)
+		return
+	}
+	resp, err := s.supCall(supervisor.Request{Op: "github_repos", Session: sessionFromRequest(r)})
+	if err != nil || !resp.OK {
+		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp.Data)
+}
+
+func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
+	if !user.IsRoot {
+		http.Error(w, "denied", http.StatusForbidden)
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	raw, _ := json.Marshal(body)
+	resp, err := s.supCall(supervisor.Request{Op: "add_app", Session: sessionFromRequest(r), Raw: raw})
 	if err != nil || !resp.OK {
 		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
 		return

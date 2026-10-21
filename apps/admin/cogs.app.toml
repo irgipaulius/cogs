@@ -1,0 +1,17 @@
+# Source of truth for the admin app. One hostname, its own tunnel.
+name = "admin"
+kind = "combined"
+zone = "hyperreader.eu"
+pages_dir = "internal/ui/dist"
+page_subdomain = "cogs-admin"
+api_subdomain = "cogs-admin"
+bind_host = "127.0.0.1"
+port = 18786
+d1_name = "cogs-admin-edge"
+r2_bucket = "cogs-admin-images"
+tunnel_name = "cogs-admin"
+pages_project = "cogs-admin"
+deploy_mode = "push"
+deploy_branch = "main"
+git_repo = "irgipaulius/cogs"
+max_upload_bytes = 1048576
