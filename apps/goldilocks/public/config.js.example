@@ -1,0 +1,5 @@
+// Copy to config.js for local Pages-style testing, or let `cogs launch` generate config.js.
+window.COGS_CONFIG = {
+  pageOrigin: "http://127.0.0.1:18788",
+  apiBase: "https://goldilocks-api.hyperreader.eu",
+};
