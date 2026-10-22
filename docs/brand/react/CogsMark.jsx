@@ -35,16 +35,20 @@ export function CogsSpinner({ size = 32, className = '', label }) {
   );
 }
 
-/** Animated wordmark — docs/brand/logo-animated.svg */
+/** Animated wordmark — docs/brand/logo-animated.svg (viewBox 12 8 96 96) */
 export function CogsLogo({ size = 96, className = '', label }) {
   return (
     <span
       className={`cogs-logo${className ? ` ${className}` : ''}`}
       role="img"
       aria-label={label || 'CoGS'}
-      style={{ width: size, height: size }}
     >
-      <BrandObject src={logoAnimatedUrl} size={size} label={label || 'CoGS'} />
+      <object
+        type="image/svg+xml"
+        data={logoAnimatedUrl}
+        className="cogs-logo__object"
+        aria-label={label || 'CoGS'}
+      />
     </span>
   );
 }

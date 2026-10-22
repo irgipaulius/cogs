@@ -236,8 +236,14 @@ export default function App() {
   useEffect(() => {
     if (panel !== 'people' || !me) return;
     if (!me.is_root && !me.grants?.some((g) => g.permission === 'users.manage')) return;
-    api('/api/users').then(setUsers).catch(() => setUsers([]));
-    if (me.is_root) api('/api/audit').then(setAudit).catch(() => setAudit([]));
+    api('/api/users')
+      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .catch(() => setUsers([]));
+    if (me.is_root) {
+      api('/api/audit')
+        .then((data) => setAudit(Array.isArray(data) ? data : []))
+        .catch(() => setAudit([]));
+    }
   }, [panel, me]);
 
   const appsList = useMemo(() => {
@@ -328,7 +334,7 @@ export default function App() {
       <div className="login-wrap">
         <form className="login-box" onSubmit={onLogin}>
           <div className="login-brand">
-            <CogsLogo size={152} className="login-logo" />
+            <CogsLogo className="login-logo" />
           </div>
           {loginErr && <div className="err">{loginErr}</div>}
           <label>Username</label>
@@ -347,10 +353,12 @@ export default function App() {
 
   return (
     <div className="shell">
+      <div className="brand-cell hide-mobile">
+        <CogsLogo className="brand-logo" />
+      </div>
       <header className="topbar">
-        <div className="brand">
-          <CogsLogo size={128} className="brand-logo" />
-        </div>
+        <CogsLogo className="brand-logo brand-logo--mobile hide-desktop" />
+        <div className="topbar-spacer hide-mobile" aria-hidden="true" />
         <div className="topbar-user hide-mobile">
           <span>{me.username}</span>
           {me.is_root && <span className="role">Root</span>}
@@ -510,11 +518,15 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(users || []).map((u) => (
+                    {(Array.isArray(users) ? users : []).map((u) => (
                       <tr key={u.id}>
                         <td>{u.username}</td>
                         <td>{u.is_root ? 'yes' : 'no'}</td>
-                        <td>{(u.grants || []).map((g) => `${g.app_name}:${g.permission}`).join(', ') || '—'}</td>
+                        <td>
+                          {(Array.isArray(u.grants) ? u.grants : [])
+                            .map((g) => `${g.app_name}:${g.permission}`)
+                            .join(', ') || '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -527,7 +539,7 @@ export default function App() {
                 <div className="table-wrap">
                   <table>
                     <tbody>
-                      {(audit || []).map((a) => (
+                      {(Array.isArray(audit) ? audit : []).map((a) => (
                         <tr key={a.id}>
                           <td>{a.created_at}</td>
                           <td>{a.username}</td>
@@ -542,7 +554,9 @@ export default function App() {
             )}
             <CreateUserForm
               apps={appsList}
-              onCreated={() => api('/api/users').then(setUsers)}
+              onCreated={() =>
+                api('/api/users').then((data) => setUsers(Array.isArray(data) ? data : []))
+              }
             />
           </>
         )}

@@ -19,7 +19,7 @@
   --radius: 14px;
   --radius-sm: 10px;
   --nav-w: 13.5rem;
-  --top-h: 4.75rem;
+  --top-h: 5.5rem;
   --font: 'Inter', system-ui, -apple-system, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
@@ -222,17 +222,36 @@ textarea {
   min-height: 100vh;
   min-height: 100dvh;
   grid-template-areas:
-    'top top'
+    'brand top'
     'nav main';
   grid-template-columns: var(--nav-w) 1fr;
-  grid-template-rows: var(--top-h) 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.brand-cell {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6.25rem;
+  padding: 0.85rem 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--glass-border);
+  border-right: 1px solid var(--glass-border);
+  background: rgba(5, 5, 8, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.topbar-spacer {
+  flex: 1;
 }
 
 .topbar {
   grid-area: top;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  min-height: 6.25rem;
   padding: 0 1.25rem 0 1.5rem;
   border-bottom: 1px solid var(--glass-border);
   background: rgba(5, 5, 8, 0.65);
@@ -247,17 +266,40 @@ textarea {
   display: flex;
   align-items: center;
   min-width: 0;
+  height: 100%;
+  padding: 0.35rem 0;
 }
 
-.brand-logo.cogs-logo,
-.login-logo.cogs-logo {
+.brand-cell .brand-logo.cogs-logo {
+  width: 100%;
+  max-width: 12.25rem;
+  height: 5.85rem;
+}
+
+.brand-logo--mobile.cogs-logo {
+  width: min(12rem, 52vw);
+  height: 3.75rem;
   flex-shrink: 0;
-  line-height: 0;
 }
 
-.brand-logo object {
-  height: 3.35rem;
-  width: auto;
+.brand-logo .cogs-logo__object {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.login-logo.cogs-logo {
+  width: min(18rem, 88vw);
+  height: 6.5rem;
+  margin: 0 auto 0.25rem;
+}
+
+.login-logo .cogs-logo__object {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .cogs-mark {
@@ -1000,7 +1042,13 @@ code {
       'main'
       'nav';
     grid-template-columns: 1fr;
-    grid-template-rows: var(--top-h) 1fr auto;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .topbar {
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 
   .nav {
