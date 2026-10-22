@@ -31,3 +31,15 @@ func TestLoadEnvFile(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+func TestLoadRelaxedListenOverrideBeatsEnvFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(p, []byte("COGS_LISTEN=0.0.0.0:18786\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COGS_LISTEN", "127.0.0.1:12345")
+	c, err := LoadRelaxed(p)
+	if err != nil || c.ListenAddr != "127.0.0.1:12345" {
+		t.Fatalf("listen=%q err=%v", c.ListenAddr, err)
+	}
+}

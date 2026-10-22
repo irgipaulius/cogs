@@ -190,10 +190,16 @@ func LoadRelaxed(envFile string) (App, error) {
 			vars[k] = v
 		}
 	}
+	listenOverride := strings.TrimSpace(os.Getenv("COGS_LISTEN"))
 	if envFile != "" {
 		if err := overlayFileOptional(envFile, vars); err != nil {
 			return App{}, err
 		}
+	}
+	// Same as Load: a process COGS_LISTEN beats .env, so deploy health
+	// checks can run a candidate on a scratch port.
+	if listenOverride != "" {
+		vars["COGS_LISTEN"] = listenOverride
 	}
 	get := func(key string) string { return vars[key] }
 	return App{
