@@ -83,7 +83,14 @@ cogs_up_stop() {
 		read -r pid < "$pidfile" 2>/dev/null || pid=
 		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
 			kill "$pid" 2>/dev/null
-			wait "$pid" 2>/dev/null || true
+			# wait(1) cannot wait for a non-child: poll until cogs up has
+			# finished stopping its apps and tunnels (max 60s), so a following
+			# start never races the old instance's shutdown.
+			i=0
+			while kill -0 "$pid" 2>/dev/null && [ $i -lt 120 ]; do
+				sleep 0.5
+				i=$((i + 1))
+			done
 		fi
 		rm -f "$pidfile"
 	fi

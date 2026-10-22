@@ -62,6 +62,7 @@ func TestWriteRCRunsAsCogsUser(t *testing.T) {
 		"/usr/sbin/daemon -f -u cogs --",      // plain daemon as cogs
 		">> '$cogs_up_log' 2>&1",              // output via shell redirect
 		"start|faststart|quietstart)",         // /etc/rc uses faststart at boot
+		"while kill -0 \"$pid\"",              // stop waits for the old cogs up to exit
 		"checkyesno cogs_up_enable || exit 0", // respects rcvar
 		"onestart)",
 		"stop|faststop|quietstop|onestop) cogs_up_stop",

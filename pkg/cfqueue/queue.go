@@ -3,6 +3,7 @@ package cfqueue
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,15 +19,13 @@ func PullBatch(accountID, queueID, token string, batchSize int) ([]Message, erro
 		batchSize = 10
 	}
 	url := fmt.Sprintf("%s/accounts/%s/queues/%s/messages/pull", apiBase, accountID, queueID)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	pb, _ := json.Marshal(map[string]int{"visibility_timeout_ms": 30000, "batch_size": batchSize})
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(pb))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	q := req.URL.Query()
-	q.Set("visibility_timeout_ms", "30000")
-	q.Set("batch_size", fmt.Sprintf("%d", batchSize))
-	req.URL.RawQuery = q.Encode()
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -48,14 +47,33 @@ func PullBatch(accountID, queueID, token string, batchSize int) ([]Message, erro
 	return wrap.Result.Messages, nil
 }
 
-// AckBatch deletes handled messages.
-func AckBatch(accountID, queueID, token string, ids []string) error {
-	if len(ids) == 0 {
+// leaseRef is one entry of the acks/retries arrays of the pull-consumer ack API.
+type leaseRef struct {
+	LeaseID string `json:"lease_id"`
+}
+
+// AckPayload builds the /messages/ack request body: {"acks":[{"lease_id":...}],"retries":[]}.
+func AckPayload(leaseIDs []string) []byte {
+	acks := make([]leaseRef, 0, len(leaseIDs))
+	for _, id := range leaseIDs {
+		if id != "" {
+			acks = append(acks, leaseRef{LeaseID: id})
+		}
+	}
+	b, _ := json.Marshal(struct {
+		Acks    []leaseRef `json:"acks"`
+		Retries []leaseRef `json:"retries"`
+	}{acks, []leaseRef{}})
+	return b
+}
+
+// AckBatch acknowledges handled messages by their lease IDs.
+func AckBatch(accountID, queueID, token string, leaseIDs []string) error {
+	if len(leaseIDs) == 0 {
 		return nil
 	}
 	url := fmt.Sprintf("%s/accounts/%s/queues/%s/messages/ack", apiBase, accountID, queueID)
-	payload := map[string]any{"acks": ids}
-	b, _ := json.Marshal(payload)
+	b := AckPayload(leaseIDs)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -79,6 +97,7 @@ type Message struct {
 	ID       string          `json:"id"`
 	Body     json.RawMessage `json:"body"`
 	Attempts int             `json:"attempts"`
+	LeaseID  string          `json:"lease_id"`
 }
 
 // BuildEvent is cf.workersBuilds.worker.build.* payload (subset).
@@ -94,6 +113,7 @@ type BuildEvent struct {
 
 // ParseBuildEvent decodes a queue body into a build event when possible.
 func ParseBuildEvent(body json.RawMessage) (BuildEvent, bool) {
+	body = unwrapBody(body)
 	var direct BuildEvent
 	if err := json.Unmarshal(body, &direct); err == nil && direct.WorkerName != "" {
 		return direct, true
@@ -123,10 +143,10 @@ func ParseBuildEvent(body json.RawMessage) (BuildEvent, bool) {
 	if len(payload) > 0 {
 		var p struct {
 			BuildTriggerMetadata struct {
-				Branch       string `json:"branch"`
-				CommitHash   string `json:"commitHash"`
+				Branch        string `json:"branch"`
+				CommitHash    string `json:"commitHash"`
 				CommitMessage string `json:"commitMessage"`
-				RepoName     string `json:"repoName"`
+				RepoName      string `json:"repoName"`
 			} `json:"buildTriggerMetadata"`
 			Error string `json:"error"`
 		}
@@ -143,4 +163,21 @@ func ParseBuildEvent(body json.RawMessage) (BuildEvent, bool) {
 		return BuildEvent{}, false
 	}
 	return ev, true
+}
+
+// unwrapBody handles bodies delivered as a JSON string: pull consumers receive
+// json/bytes content base64-encoded, and text content as a plain string.
+func unwrapBody(body json.RawMessage) json.RawMessage {
+	var str string
+	if err := json.Unmarshal(body, &str); err != nil {
+		return body
+	}
+	str = strings.TrimSpace(str)
+	if dec, err := base64.StdEncoding.DecodeString(str); err == nil && json.Valid(dec) {
+		return dec
+	}
+	if json.Valid([]byte(str)) {
+		return json.RawMessage(str)
+	}
+	return body
 }

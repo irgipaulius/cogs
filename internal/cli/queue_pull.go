@@ -49,30 +49,35 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 	for _, msg := range msgs {
 		ev, ok := cfqueue.ParseBuildEvent(msg.Body)
 		if !ok {
-			acks = append(acks, msg.ID)
+			acks = append(acks, msg.LeaseID)
 			continue
 		}
 		appID, branch := matchBuildEvent(root, ws, ev)
 		if appID == "" {
-			acks = append(acks, msg.ID)
+			acks = append(acks, msg.LeaseID)
 			continue
 		}
 		if branch != "" && ev.Branch != "" && !strings.EqualFold(branch, ev.Branch) {
-			acks = append(acks, msg.ID)
+			acks = append(acks, msg.LeaseID)
 			continue
 		}
 		ctx := context.Background()
 		switch {
 		case strings.Contains(ev.Type, "build.succeeded"):
-			_, _ = deploy.RecordBuildSuccess(ctx, root, appID, ev.CommitHash)
+			if _, err := deploy.RecordBuildSuccess(ctx, root, appID, ev.CommitHash); err != nil {
+				log.Printf("queue: %s redeploy after build failed: %v", appID, err)
+			} else {
+				log.Printf("queue: %s redeployed after Workers build %s", appID, ev.CommitHash)
+			}
 		case strings.Contains(ev.Type, "build.failed"):
 			errMsg := ev.Error
 			if errMsg == "" {
 				errMsg = "Workers build failed"
 			}
 			_ = deploy.RecordBuildFailure(root, appID, ev.CommitHash, errMsg)
+			log.Printf("queue: %s Workers build failed: %s", appID, errMsg)
 		}
-		acks = append(acks, msg.ID)
+		acks = append(acks, msg.LeaseID)
 	}
 	if err := cfqueue.AckBatch(accountID, queueID, token, acks); err != nil {
 		logQueuePullErr("queue ack: " + err.Error())

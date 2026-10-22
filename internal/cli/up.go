@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -114,7 +115,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	}
 	boot.LoadUpEnvIntoProcess(root)
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
-	defer os.Remove(upPIDPath(root))
+	defer removePIDFileIfOwn(upPIDPath(root), os.Getpid())
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -218,4 +219,17 @@ func writeBootScript(root string) error {
 		return err
 	}
 	return boot.Write(root, bin)
+}
+
+// removePIDFileIfOwn deletes pidPath only while it still names pid, so an
+// exiting cogs up never deletes the pidfile of the instance that replaced it.
+func removePIDFileIfOwn(pidPath string, pid int) {
+	b, err := os.ReadFile(pidPath)
+	if err != nil {
+		return
+	}
+	var got int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(b)), "%d", &got); err == nil && got == pid {
+		_ = os.Remove(pidPath)
+	}
 }
