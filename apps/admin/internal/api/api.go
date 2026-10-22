@@ -47,6 +47,7 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("POST /api/rollback", s.auth(s.handleRollback))
 	mux.HandleFunc("GET /api/auth/status", s.auth(s.handleAuthStatus))
 	mux.HandleFunc("GET /api/repos", s.auth(s.handleRepos))
+	mux.HandleFunc("GET /api/repos/preview", s.auth(s.handleRepoPreview))
 	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
 	mux.HandleFunc("GET /api/users", s.auth(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.auth(s.handleCreateUser))

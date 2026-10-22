@@ -68,6 +68,9 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 	if strings.HasPrefix(gitRootRel, "..") {
 		gitRootRel = ""
 	}
+	if err := appadd.PatchAppMeta(cfgDir, opts.RepoFull, mode, opts.Zone, opts.PageSubdomain); err != nil {
+		return "", "", "", err
+	}
 	detail, err = appadd.RegisterFromDir(opts.WSRoot, name, cfgDir, opts.RepoFull, mode, filepath.ToSlash(gitRootRel))
 	if err != nil {
 		return "", "", "", err

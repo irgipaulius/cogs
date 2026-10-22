@@ -50,7 +50,7 @@ func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode, gitRootRel strin
 			return "", fmt.Errorf("app %q already exists", name)
 		}
 	}
-	if err := patchGitMeta(appDir, gitRepo, deployMode); err != nil {
+	if err := patchGitMeta(appDir, gitRepo, deployMode, "", ""); err != nil {
 		return "", err
 	}
 	gitRootRel = filepath.ToSlash(strings.TrimSpace(gitRootRel))
@@ -79,7 +79,12 @@ func hasGoMod(dir string) bool {
 	return err == nil
 }
 
-func patchGitMeta(appDir, gitRepo, deployMode string) error {
+// PatchAppMeta updates cogs.app.toml before register (install overrides).
+func PatchAppMeta(appDir, gitRepo, deployMode, zone, pageSub string) error {
+	return patchGitMeta(appDir, gitRepo, deployMode, zone, pageSub)
+}
+
+func patchGitMeta(appDir, gitRepo, deployMode, zone, pageSub string) error {
 	path := filepath.Join(appDir, appcfg.Filename)
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -91,6 +96,12 @@ func patchGitMeta(appDir, gitRepo, deployMode string) error {
 	}
 	if deployMode = strings.TrimSpace(deployMode); deployMode != "" {
 		lines = setKey(lines, "deploy_mode", fmt.Sprintf("%q", deployMode))
+	}
+	if zone = strings.TrimSpace(zone); zone != "" {
+		lines = setKey(lines, "zone", fmt.Sprintf("%q", zone))
+	}
+	if pageSub = strings.TrimSpace(pageSub); pageSub != "" {
+		lines = setKey(lines, "page_subdomain", fmt.Sprintf("%q", pageSub))
 	}
 	out := strings.Join(lines, "\n")
 	if !strings.HasSuffix(out, "\n") {

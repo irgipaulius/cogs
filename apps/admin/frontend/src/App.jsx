@@ -13,7 +13,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { AppDetailView } from './appDetail.jsx';
 import { AddAppModal, AddAppTrigger } from './AddAppModal.jsx';
-import { CogsMark } from './CogsMark.jsx';
+import { CogsMark, CogsLogo } from './CogsMark.jsx';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -328,11 +328,7 @@ export default function App() {
       <div className="login-wrap">
         <form className="login-box" onSubmit={onLogin}>
           <div className="login-brand">
-            <CogsMark size={48} />
-            <div>
-              <h1>CoGS</h1>
-              <p className="login-tagline">Mission control</p>
-            </div>
+            <CogsLogo size={152} className="login-logo" />
           </div>
           {loginErr && <div className="err">{loginErr}</div>}
           <label>Username</label>
@@ -353,11 +349,7 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <CogsMark size={28} className="brand-mark" />
-          <div className="brand-text">
-            <span className="brand-name">CoGS</span>
-            <span className="brand-sub">Mission control</span>
-          </div>
+          <CogsLogo size={128} className="brand-logo" />
         </div>
         <div className="topbar-user hide-mobile">
           <span>{me.username}</span>

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getClientId, getConfig } from "./lib/config.js";
 import { measureLink } from "./lib/linkperf.js";
 import { loadJSON, saveJSON } from "./lib/storage.js";
-import { CogsMark } from "./CogsMark.jsx";
+import { CogsMark, CogsLogo } from "./CogsMark.jsx";
 
 export default function App() {
   const cfg = useMemo(() => getConfig(), []);
@@ -214,14 +214,9 @@ export default function App() {
     <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 pb-10 pt-8 sm:max-w-xl sm:px-6">
       <header className="mb-8">
         <div className="mb-6 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] shadow-glow">
-              <CogsMark size={36} />
-            </div>
-            <div>
-              <p className="star-label">CoGS</p>
-              <h1 className="text-2xl font-semibold tracking-tight text-white">Todo</h1>
-            </div>
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <CogsLogo size={96} className="shrink-0" />
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Todo</h1>
           </div>
           <button
             type="button"

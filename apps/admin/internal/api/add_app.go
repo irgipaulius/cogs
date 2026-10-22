@@ -27,6 +27,7 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		Repo          string `json:"repo"`
 		DeployMode    string `json:"deploy_mode"`
 		PageSubdomain string `json:"page_subdomain"`
+		Zone          string `json:"zone"`
 		ScaffoldOnly  bool   `json:"scaffold_only"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -53,6 +54,7 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 			AppName:       body.Name,
 			DeployMode:    body.DeployMode,
 			PageSubdomain: body.PageSubdomain,
+			Zone:          body.Zone,
 		})
 	}
 	if err != nil {
