@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/irgipaulius/cogs/pkg/appadd"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
@@ -76,6 +77,12 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 		return "", "", "", err
 	}
 	appDir = cfgDir
+	repoToStar := opts.RepoFull
+	go func() {
+		c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		ghcli.StarRepoBestEffort(c, repoToStar)
+	}()
 	return name, appDir, detail, nil
 }
 
