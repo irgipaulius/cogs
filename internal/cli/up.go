@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -38,34 +37,11 @@ func cmdUp(args []string) error {
 	if err != nil {
 		return fmt.Errorf("cogs up: %w", err)
 	}
-	loadUpEnv(root)
+	boot.LoadUpEnvIntoProcess(root)
 	if !foreground {
 		return daemonizeUp(root)
 	}
 	return runUp(root, ws, noTunnel)
-}
-
-func loadUpEnv(root string) {
-	path := filepath.Join(root, ".cogs", "boot", "cogs-up.env")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(string(b), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-		if k != "" && os.Getenv(k) == "" {
-			_ = os.Setenv(k, v)
-		}
-	}
 }
 
 func cmdDown(args []string) error {
@@ -136,7 +112,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	if err := writeBootScript(root); err != nil {
 		return err
 	}
-	loadUpEnv(root)
+	boot.LoadUpEnvIntoProcess(root)
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
 	defer os.Remove(upPIDPath(root))
 
@@ -157,7 +133,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 			}
 			healthURL := appHealthURL(dir)
 			if _, ok := appRunning(dir); ok {
-				if healthURL != "" && !probeAppHealth(healthURL) {
+				if healthURL != "" && !appInHealthGrace(dir) && !probeAppHealth(healthURL) {
 					stopApp(dir)
 					if err := ensureAppRunningQuiet(dir); err != nil && !quiet {
 						ux.Warn(a.Name + ": " + err.Error())

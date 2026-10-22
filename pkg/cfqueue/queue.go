@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 const apiBase = "https://api.cloudflare.com/client/v4"
@@ -93,19 +94,52 @@ type BuildEvent struct {
 
 // ParseBuildEvent decodes a queue body into a build event when possible.
 func ParseBuildEvent(body json.RawMessage) (BuildEvent, bool) {
-	var outer struct {
-		Type string          `json:"type"`
-		Data json.RawMessage `json:"data"`
+	var direct BuildEvent
+	if err := json.Unmarshal(body, &direct); err == nil && direct.WorkerName != "" {
+		return direct, true
 	}
-	if err := json.Unmarshal(body, &outer); err != nil {
+
+	var envelope struct {
+		Type    string          `json:"type"`
+		Source  json.RawMessage `json:"source"`
+		Payload json.RawMessage `json:"payload"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
 		return BuildEvent{}, false
 	}
-	var ev BuildEvent
-	if err := json.Unmarshal(outer.Data, &ev); err != nil {
-		_ = json.Unmarshal(body, &ev)
+	ev := BuildEvent{Type: envelope.Type}
+	if len(envelope.Source) > 0 {
+		var src struct {
+			WorkerName string `json:"workerName"`
+		}
+		_ = json.Unmarshal(envelope.Source, &src)
+		ev.WorkerName = src.WorkerName
 	}
-	ev.Type = outer.Type
-	if ev.WorkerName == "" && ev.CommitHash == "" {
+	payload := envelope.Payload
+	if len(payload) == 0 {
+		payload = envelope.Data
+	}
+	if len(payload) > 0 {
+		var p struct {
+			BuildTriggerMetadata struct {
+				Branch       string `json:"branch"`
+				CommitHash   string `json:"commitHash"`
+				CommitMessage string `json:"commitMessage"`
+				RepoName     string `json:"repoName"`
+			} `json:"buildTriggerMetadata"`
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(payload, &p)
+		ev.Branch = p.BuildTriggerMetadata.Branch
+		ev.CommitHash = p.BuildTriggerMetadata.CommitHash
+		ev.Message = p.BuildTriggerMetadata.CommitMessage
+		ev.RepoName = p.BuildTriggerMetadata.RepoName
+		if ev.Error == "" {
+			ev.Error = p.Error
+		}
+	}
+	if ev.WorkerName == "" && !strings.Contains(ev.Type, "build.") {
 		return BuildEvent{}, false
 	}
 	return ev, true

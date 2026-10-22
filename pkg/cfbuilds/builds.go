@@ -81,7 +81,7 @@ func (c *Client) RepoConnection(providerAccountName, repoName string, repoID int
 	return result.ID, nil
 }
 
-// WorkerScriptTag resolves the Workers script id/tag for Builds API paths.
+// WorkerScriptTag resolves the Workers Builds script tag (script id) for API paths.
 func (c *Client) WorkerScriptTag(workerName string) (string, error) {
 	path := fmt.Sprintf("/accounts/%s/workers/scripts", c.AccountID)
 	b, err := c.do(http.MethodGet, path, nil)
@@ -89,8 +89,7 @@ func (c *Client) WorkerScriptTag(workerName string) (string, error) {
 		return workerName, err
 	}
 	var scripts []struct {
-		ID   string `json:"id"`
-		Name string `json:"id"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(b, &scripts); err != nil {
 		return workerName, nil
@@ -99,6 +98,11 @@ func (c *Client) WorkerScriptTag(workerName string) (string, error) {
 		if s.ID == workerName || strings.EqualFold(s.ID, workerName) {
 			return s.ID, nil
 		}
+	}
+	// Builds API accepts the worker name once the script exists; triggers GET validates the tag.
+	triggersPath := fmt.Sprintf("/accounts/%s/builds/workers/%s/triggers", c.AccountID, url.PathEscape(workerName))
+	if _, err := c.do(http.MethodGet, triggersPath, nil); err == nil {
+		return workerName, nil
 	}
 	return workerName, nil
 }
@@ -157,28 +161,35 @@ func (c *Client) EnsureDeployQueue(name string) (string, error) {
 func (c *Client) EnsureHTTPPullConsumer(queueID string) error {
 	path := fmt.Sprintf("/accounts/%s/queues/%s/consumers", c.AccountID, queueID)
 	_, err := c.do(http.MethodPost, path, map[string]string{"type": "http_pull"})
+	if err != nil && strings.Contains(err.Error(), "already") {
+		return nil
+	}
 	return err
 }
 
-// EnsureBuildEventSubscription sends Workers Builds events to the queue.
-func (c *Client) EnsureBuildEventSubscription(queueID string) error {
-	path := fmt.Sprintf("/accounts/%s/event_notifications/subscriptions", c.AccountID)
+// EnsureBuildEventSubscription sends Workers Builds events for one worker to the queue.
+func (c *Client) EnsureBuildEventSubscription(queueID, workerName string) error {
+	path := fmt.Sprintf("/accounts/%s/event_subscriptions/subscriptions", c.AccountID)
 	body := map[string]any{
-		"name":     "cogs-workers-builds",
-		"enabled":  true,
+		"name":    "cogs-workers-builds-" + workerName,
+		"enabled": true,
 		"destination": map[string]any{
-			"type":     "queue",
+			"type":     "queues.queue",
 			"queue_id": queueID,
 		},
 		"source": map[string]any{
-			"type": "workers.builds",
+			"type":        "workersBuilds.worker",
+			"worker_name": workerName,
 		},
 		"events": []string{
-			"cf.workersBuilds.worker.build.succeeded",
-			"cf.workersBuilds.worker.build.failed",
+			"build.succeeded",
+			"build.failed",
 		},
 	}
 	_, err := c.do(http.MethodPost, path, body)
+	if err != nil && (strings.Contains(err.Error(), "already") || strings.Contains(err.Error(), "duplicate")) {
+		return nil
+	}
 	return err
 }
 

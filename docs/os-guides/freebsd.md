@@ -17,7 +17,8 @@ cogs up              # background supervisor
 
 - Writes **`.cogs/boot/cogs_up`** (rc.d script using **`daemon(8)`** as user **`cogs`**, not blocking boot).
 - Writes **`.cogs/boot/cogs-up.sh`** for `@reboot` cron if you prefer.
-- Sources **`.cogs/boot/cogs-up.env`** for `COGS_DEPLOY_QUEUE_ID` and other vars.
+- Sources **`.cogs/boot/cogs-up.env`** for supervisor-only vars (`COGS_DEPLOY_QUEUE_ID`, `COGS_CF_QUEUE_ID`).
+- **`service cogs_up status|stop`** use the pidfile under **`.cogs/run/up.pid`** (written by `cogs up --foreground`).
 - Restarts app binaries, tunnels, **admin supervisor**, and polls the deploy queue.
 
 Install the generated rc script:

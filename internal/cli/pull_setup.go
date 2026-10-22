@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
@@ -58,6 +56,20 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 	if repoID == 0 {
 		return fmt.Errorf("git_repo %q not found in your GitHub account — check cogs.app.toml", repoFull)
 	}
+	worker := app.WorkerName
+	if worker == "" {
+		worker = app.PagesProject
+	}
+	if pageHost == "" || apiHost == "" {
+		return fmt.Errorf("pull mode needs page and api hostnames (zone/subdomains in cogs.app.toml)")
+	}
+	if err := writePullWorkerWrangler(projectDir, worker, pageHost); err != nil {
+		return err
+	}
+	if err := deployPullWorkerUI(projectDir, pageHost, apiHost); err != nil {
+		return fmt.Errorf("initial Worker deploy: %w", err)
+	}
+
 	client := cfbuilds.Client{AccountID: accountID, Token: token}
 	connID, err := client.RepoConnection(owner, repoFull, repoID)
 	if err != nil {
@@ -66,16 +78,12 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 		}
 		return err
 	}
-	worker := app.WorkerName
-	if worker == "" {
-		worker = app.PagesProject
-	}
 	scriptTag, err := client.WorkerScriptTag(worker)
 	if err != nil {
 		return fmt.Errorf("worker %q: %w (deploy the Worker once or check worker_name)", worker, err)
 	}
 	rootDir := strings.TrimSpace(app.RootDirectory)
-	buildCmd := "npm run build"
+	buildCmd := pullBuildCommand(apiHost, pageHost)
 	deployCmd := "npx wrangler deploy"
 	if err := client.Trigger(scriptTag, app.DeployBranch, buildCmd, deployCmd, rootDir, connID); err != nil {
 		if cfbuilds.IsGitHubAppError(err) {
@@ -87,20 +95,18 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 
 	queueID, err := client.EnsureDeployQueue(defaultQueueName)
 	if err != nil {
-		ux.Warn("deploy queue: " + err.Error())
-	} else {
-		_ = client.EnsureHTTPPullConsumer(queueID)
-		_ = client.EnsureBuildEventSubscription(queueID)
-		envPath := boot.UpEnvPath(wsRoot)
-		if err := boot.WriteUpEnv(wsRoot, map[string]string{"COGS_DEPLOY_QUEUE_ID": queueID}); err != nil {
-			ux.Warn("write " + envPath + ": " + err.Error())
-		} else {
-			fmt.Printf("Wrote %s — restart cogs up to poll build events\n", envPath)
-		}
+		return fmt.Errorf("deploy queue: %w", err)
 	}
-	_ = pageHost
-	_ = apiHost
-	_ = filepath.Base(projectDir)
-	_ = os.Getenv("COGS_DEPLOY_QUEUE_ID")
+	if err := client.EnsureHTTPPullConsumer(queueID); err != nil {
+		return fmt.Errorf("queue HTTP pull consumer: %w", err)
+	}
+	if err := client.EnsureBuildEventSubscription(queueID, worker); err != nil {
+		return fmt.Errorf("build event subscription: %w", err)
+	}
+	envPath := boot.UpEnvPath(wsRoot)
+	if err := boot.WriteUpEnv(wsRoot, map[string]string{"COGS_DEPLOY_QUEUE_ID": queueID}); err != nil {
+		return fmt.Errorf("write %s: %w", envPath, err)
+	}
+	fmt.Printf("Wrote %s — restart cogs up to poll build events\n", envPath)
 	return nil
 }

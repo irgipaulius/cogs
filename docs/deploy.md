@@ -89,8 +89,8 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 
 1. Install the **Cloudflare GitHub App** in the dashboard (API cannot do this): Workers & Pages → Builds → Connect.
 2. `cogs github login` (or dashboard **Login with GitHub**) — token in `.cogs/github.json`.
-3. `cogs launch goldilocks -y` — starts the API first, then best-effort: repo connection, Builds trigger (`npm run build`, `npx wrangler deploy` from `apps/goldilocks/`), queue **`cogs-deploys`**, **HTTP pull consumer**, and build event subscription.
-4. Queue id is written to **`.cogs/boot/cogs-up.env`** as `COGS_DEPLOY_QUEUE_ID=...`. **`cogs up`** sources that file (and `cogs-up.sh` / systemd `EnvironmentFile` / FreeBSD `daemon` wrapper do the same). Restart `cogs up` after launch if it was already running.
+3. `cogs launch goldilocks -y` (flags after the app name work too: `cogs launch goldilocks -y`) — starts the API, deploys the Worker UI once with the real API hostname in `public/config.js`, then: repo connection, Builds trigger (`COGS_PUBLIC_API_URL=… npm run build`, `npx wrangler deploy` from `apps/goldilocks/`), queue **`cogs-deploys`**, **HTTP pull consumer**, and per-worker build event subscription.
+4. Queue id is written to **`.cogs/boot/cogs-up.env`** as `COGS_DEPLOY_QUEUE_ID=...` (only supervisor keys — do not put `COGS_LISTEN` there). **`cogs up`** loads whitelisted keys from that file (boot scripts source the same file). Restart `cogs up` after launch if it was already running.
 
 `cogs up` polls the queue over HTTPS (outbound only). Match `workerName` + branch to app; success triggers backend-only deploy. Pull errors log once per distinct failure (check `.cogs/run/up.log`).
 

@@ -104,6 +104,7 @@ func startAppProcess(projectDir string, rebuild, quietIfRunning bool) error {
 		_ = cmd.Process.Kill()
 		return err
 	}
+	markAppHealthGrace(projectDir)
 	ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API started pid %d (%s)", cmd.Process.Pid, logPath))
 	return nil
 }

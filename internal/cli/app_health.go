@@ -23,7 +23,7 @@ func probeAppHealth(url string) bool {
 	if url == "" {
 		return false
 	}
-	client := &http.Client{Timeout: 2 * time.Second}
+	client := &http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return false

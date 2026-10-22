@@ -25,36 +25,33 @@ type launchFlags struct {
 	leaseWatch bool
 }
 
-// reorderLaunchArgs puts flags before the first positional so "cogs launch admin -y" works.
-func takesArg(flag string) bool {
+func flagTakesValue(flag string) bool {
 	switch flag {
-	case "--dir", "-dir":
+	case "--dir", "-dir", "--app":
 		return true
 	default:
 		return false
 	}
 }
 
+// reorderLaunchArgs collects flags from anywhere in argv (e.g. "launch admin -y --skip-pages").
 func reorderLaunchArgs(args []string) []string {
-	if len(args) == 0 {
-		return args
-	}
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if a == "--" {
+			pos = append(pos, args[i:]...)
+			break
+		}
 		if strings.HasPrefix(a, "-") {
 			flags = append(flags, a)
-			if takesArg(a) && i+1 < len(args) {
-				flags = append(flags, args[i+1])
+			if flagTakesValue(a) && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				i++
+				flags = append(flags, args[i])
 			}
 			continue
 		}
-		pos = append(pos, args[i:]...)
-		break
-	}
-	if len(pos) == 0 {
-		return flags
+		pos = append(pos, a)
 	}
 	return append(flags, pos...)
 }
@@ -84,6 +81,7 @@ func parseLaunchFlags(args []string) (launchFlags, error) {
 	if rest := fs.Args(); len(rest) > 0 {
 		f.dir = rest[0]
 	}
+	f.yes = f.yes || globals.Yes
 	if noLeaseWatch {
 		f.leaseWatch = false
 	}
@@ -129,8 +127,15 @@ func resolveLaunchProjectDir(dir string) (string, error) {
 }
 
 func hasLaunchManifest(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, appcfgFilename(dir))); err == nil {
+		return true
+	}
 	_, err := os.Stat(filepath.Join(dir, launch.DefaultFilename))
 	return err == nil
+}
+
+func appcfgFilename(dir string) string {
+	return "cogs.app.toml"
 }
 
 func resolveViaWorkspace(fromDir, appRef string) (string, bool) {
