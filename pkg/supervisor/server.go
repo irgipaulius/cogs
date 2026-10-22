@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -21,7 +20,6 @@ type Server struct {
 	Store      *adminstore.Store
 	Metrics    *MetricsRing
 	Registry   Registry
-	mu         sync.Mutex
 }
 
 // DefaultSocketPath under workspace .cogs.

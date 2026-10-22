@@ -85,11 +85,6 @@ func cfTokenTunnel() (string, error) {
 	return wranglerOAuthToken()
 }
 
-// cfToken is an alias for DNS operations.
-func cfToken(projectDir, zoneName string) (string, error) {
-	return cfTokenDNS(projectDir, zoneName)
-}
-
 func cfRequest(token, method, url string, body any) (cfResponse, error) {
 	var r io.Reader
 	if body != nil {

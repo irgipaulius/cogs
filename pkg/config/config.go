@@ -104,15 +104,6 @@ func overlayScanner(f *os.File, vars map[string]string) error {
 	return sc.Err()
 }
 
-func overlayFile(path string, vars map[string]string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return overlayScanner(f, vars)
-}
-
 func parse(vars map[string]string) (App, error) {
 	get := func(key string) string { return vars[key] }
 

@@ -60,11 +60,6 @@ func startAppBackground(projectDir string) error {
 	return startAppProcess(projectDir, true, false)
 }
 
-// ensureAppRunning starts the built binary when it is down. It rebuilds only if the binary is missing.
-func ensureAppRunning(projectDir string) error {
-	return startAppProcess(projectDir, false, false)
-}
-
 func ensureAppRunningQuiet(projectDir string) error {
 	return startAppProcess(projectDir, false, true)
 }

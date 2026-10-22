@@ -44,11 +44,6 @@ func ensureWranglerLogin() error {
 	return err
 }
 
-func wranglerTry(args ...string) error {
-	_, err := wranglerCapture(args...)
-	return err
-}
-
 func wrangler(args ...string) error {
 	cmd, err := wranglerCmd(args...)
 	if err != nil {

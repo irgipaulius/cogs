@@ -107,13 +107,3 @@ func githubLogin(root string, args []string) error {
 	return nil
 }
 
-func requireGitHubToken(root string) (string, error) {
-	tok := githubauth.Token(root)
-	if tok != "" {
-		return tok, nil
-	}
-	if globals.Yes {
-		return "", fmt.Errorf("GitHub token required — run: cogs github login (or set COGS_GITHUB_TOKEN)")
-	}
-	return "", fmt.Errorf("run cogs github login first")
-}
