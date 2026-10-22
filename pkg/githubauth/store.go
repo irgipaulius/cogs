@@ -9,7 +9,7 @@ import (
 
 const fileName = "github.json"
 
-// Credential is the workspace GitHub token (device flow or pasted token).
+// Credential is legacy workspace GitHub token (prefer host gh login).
 type Credential struct {
 	Token     string    `json:"token"`
 	Login     string    `json:"login,omitempty"`
@@ -53,8 +53,11 @@ func Save(wsRoot string, c Credential) error {
 	return os.WriteFile(path(wsRoot), b, 0o600)
 }
 
-// Token returns a non-empty bearer token or empty string.
+// Token returns a bearer token: host `gh auth token` first, then legacy .cogs/github.json.
 func Token(wsRoot string) string {
+	if t, err := tokenFromGHCLI(); err == nil && t != "" {
+		return t
+	}
 	c, err := Load(wsRoot)
 	if err != nil {
 		return ""

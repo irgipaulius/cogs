@@ -1,58 +1,51 @@
 package supervisor
 
 import (
+	"context"
 	"encoding/json"
+	"time"
 
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
 )
 
 func githubStatus(wsRoot string) json.RawMessage {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	gh, _ := ghcli.Status(ctx)
+	if gh.LoggedIn {
+		b, _ := json.Marshal(map[string]any{
+			"signed_in": true,
+			"login":     gh.Login,
+			"source":    "gh",
+		})
+		return b
+	}
 	c, _ := githubauth.Load(wsRoot)
 	b, _ := json.Marshal(map[string]any{
 		"signed_in": c.Token != "",
 		"login":     c.Login,
+		"source":    "legacy",
 	})
 	return b
 }
 
 func githubDeviceStart(wsRoot string) (json.RawMessage, error) {
-	clientID, err := githubauth.ClientID()
-	if err != nil {
-		return nil, err
-	}
-	start, err := githubauth.StartDeviceFlow(clientID)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(map[string]any{
-		"user_code":        start.UserCode,
-		"verification_uri": start.VerificationURI,
-		"device_code":      start.DeviceCode,
-		"interval":         start.Interval,
-	})
+	_ = wsRoot
+	return nil, errMissingGitHub
 }
 
 func githubDevicePoll(wsRoot, deviceCode string) (json.RawMessage, error) {
-	clientID, err := githubauth.ClientID()
-	if err != nil {
-		return nil, err
-	}
-	c, err := githubauth.PollDeviceFlowOnce(clientID, deviceCode)
-	if err != nil {
-		return nil, err
-	}
-	if err := githubauth.Save(wsRoot, c); err != nil {
-		return nil, err
-	}
-	return githubStatus(wsRoot), nil
+	_ = wsRoot
+	_ = deviceCode
+	return nil, errMissingGitHub
 }
 
 func githubRepos(wsRoot string) (json.RawMessage, error) {
-	c, err := githubauth.Load(wsRoot)
-	if err != nil || c.Token == "" {
-		return nil, errMissingGitHub
-	}
-	repos, err := githubauth.ListRepos(c.Token)
+	_ = wsRoot
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	repos, err := ghcli.ListRepos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +53,7 @@ func githubRepos(wsRoot string) (json.RawMessage, error) {
 	return b, err
 }
 
-var errMissingGitHub = &githubErr{msg: "GitHub not signed in — use Login with GitHub"}
+var errMissingGitHub = &githubErr{msg: "GitHub not logged in on host — run: gh auth login"}
 
 type githubErr struct{ msg string }
 

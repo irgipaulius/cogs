@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os/exec"
+	"time"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/appadd"
-	"github.com/irgipaulius/cogs/pkg/githubauth"
+	"github.com/irgipaulius/cogs/pkg/appinstall"
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 )
 
 func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
@@ -24,31 +27,45 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		Repo          string `json:"repo"`
 		DeployMode    string `json:"deploy_mode"`
 		PageSubdomain string `json:"page_subdomain"`
+		ScaffoldOnly  bool   `json:"scaffold_only"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "bad json")
 		return
 	}
-	c, _ := githubauth.Load(s.WorkspaceRoot)
-	if c.Token == "" {
-		writeAPIError(w, http.StatusBadRequest, "GitHub not signed in — connect GitHub before adding an app")
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancel()
+	gh, _ := ghcli.Status(ctx)
+	if !gh.LoggedIn {
+		writeAPIError(w, http.StatusBadRequest, "GitHub not logged in on this host — run: gh auth login")
 		return
 	}
-	detail, err := appadd.Add(appadd.Options{
-		WSRoot:        s.WorkspaceRoot,
-		Name:          body.Name,
-		GitRepo:       body.Repo,
-		DeployMode:    body.DeployMode,
-		PageSubdomain: body.PageSubdomain,
-	})
+	var detail, appName string
+	var err error
+	if body.ScaffoldOnly {
+		detail, err = appadd.Add(appadd.Options{
+			WSRoot:        s.WorkspaceRoot,
+			Name:          body.Name,
+			GitRepo:       body.Repo,
+			DeployMode:    body.DeployMode,
+			PageSubdomain: body.PageSubdomain,
+		})
+		appName = body.Name
+	} else {
+		appName, _, detail, err = appinstall.Install(ctx, appinstall.Options{
+			WSRoot:        s.WorkspaceRoot,
+			RepoFull:      body.Repo,
+			AppName:       body.Name,
+			DeployMode:    body.DeployMode,
+			PageSubdomain: body.PageSubdomain,
+		})
+	}
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	_ = s.Store.WriteAudit(r.Context(), user, "add_app", detail)
-	wsRoot := s.WorkspaceRoot
-	name := body.Name
-	go runLaunchAfterAdd(wsRoot, name)
+	go runLaunchAfterAdd(s.WorkspaceRoot, appName)
 	writeJSON(w, map[string]string{
 		"detail": detail,
 		"launch": "started in background (cogs launch -y --no-serve)",

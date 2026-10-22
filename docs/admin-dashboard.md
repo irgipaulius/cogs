@@ -47,11 +47,13 @@ Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared e
 
 ## GitHub and Add app (root only)
 
-1. Set **`COGS_GITHUB_CLIENT_ID`** on the host running admin (OAuth app client id, public).
-2. Dashboard **Sign in with GitHub** — same token as `cogs github login` → `.cogs/github.json`. The **admin process** must have **`COGS_GITHUB_CLIENT_ID`** in its environment (not only the supervisor).
-3. **Add app**: pick repo, **push** or **pull** mode, UI subdomain → creates `apps/<name>/cogs.app.toml`, updates `cogs.workspace.json` and `go work use`, runs non-interactive launch.
+Host-level CLI auth only — no OAuth app in the dashboard.
 
-CLI equivalent: `cogs github login`, then scaffold manually per [deploy.md](deploy.md).
+1. On the CoGS server: `gh auth login && gh auth setup-git` and `wrangler login` (or run `scripts/bootstrap-host.sh`).
+2. Dashboard **Add app** reads **`GET /api/auth/status`** (GitHub + Cloudflare) and **`GET /api/repos`** (via `gh repo list`).
+3. **Install** clones or uses the workspace checkout, registers `cogs.app.toml`, updates `cogs.workspace.json`, runs `cogs launch -y --no-serve` in the background.
+
+CLI equivalent: `gh auth login`, then `cogs launch` on an app directory per [deploy.md](deploy.md).
 
 ## RBAC
 

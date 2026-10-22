@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/boot"
 	"github.com/irgipaulius/cogs/pkg/cfbuilds"
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -36,21 +39,39 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 	if ghTok == "" {
 		return fmt.Errorf("GitHub not signed in — run: cogs github login (pull mode UI builds need repo access)")
 	}
-	repos, err := githubauth.ListRepos(ghTok)
-	if err != nil {
-		return err
-	}
 	repoFull := strings.TrimSpace(app.GitRepo)
 	var repoID int64
 	var owner string
-	for _, r := range repos {
-		if r.FullName == repoFull {
-			repoID = r.ID
-			parts := strings.SplitN(r.FullName, "/", 2)
-			if len(parts) == 2 {
-				owner = parts[0]
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	repos, err := ghcli.ListRepos(ctx)
+	if err != nil && ghTok != "" {
+		legacy, legErr := githubauth.ListRepos(ghTok)
+		if legErr != nil {
+			return err
+		}
+		for _, r := range legacy {
+			if r.FullName == repoFull {
+				repoID = r.ID
+				parts := strings.SplitN(r.FullName, "/", 2)
+				if len(parts) == 2 {
+					owner = parts[0]
+				}
+				break
 			}
-			break
+		}
+	} else if err != nil {
+		return err
+	} else {
+		for _, r := range repos {
+			if r.FullName == repoFull {
+				repoID = r.ID
+				parts := strings.SplitN(r.FullName, "/", 2)
+				if len(parts) == 2 {
+					owner = parts[0]
+				}
+				break
+			}
 		}
 	}
 	if repoID == 0 {

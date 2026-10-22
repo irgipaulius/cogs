@@ -30,7 +30,7 @@ func ResolveCommit(ctx context.Context, wsRoot, ref string, token string) (strin
 		return "", err
 	}
 	cmd := exec.CommandContext(ctx, "git", "-C", wsRoot, "rev-parse", ref)
-	cmd.Env = append(os.Environ(), githubauth.ConfigureGitEnv(token)...)
+	cmd.Env = gitEnv(token)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("rev-parse %q: %w", ref, err)
@@ -42,7 +42,7 @@ func gitFetchOrigin(ctx context.Context, wsRoot, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", wsRoot, "fetch", "origin", "--prune")
-	cmd.Env = append(os.Environ(), githubauth.ConfigureGitEnv(token)...)
+	cmd.Env = gitEnv(token)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git fetch: %w: %s", err, strings.TrimSpace(string(out)))
@@ -66,7 +66,7 @@ func ensureWorktree(ctx context.Context, wsRoot, appID, commit, token string) (s
 	}
 	_ = exec.CommandContext(ctx, "git", "-C", wsRoot, "worktree", "remove", "--force", dir).Run()
 	cmd := exec.CommandContext(ctx, "git", "-C", wsRoot, "worktree", "add", "--detach", dir, commit)
-	cmd.Env = append(os.Environ(), githubauth.ConfigureGitEnv(token)...)
+	cmd.Env = gitEnv(token)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("worktree add: %w: %s", err, strings.TrimSpace(string(out)))
@@ -84,4 +84,12 @@ func branchRef(branch string) string {
 
 func hasCommit(ctx context.Context, wsRoot, commit string) bool {
 	return exec.CommandContext(ctx, "git", "-C", wsRoot, "cat-file", "-e", commit+"^{commit}").Run() == nil
+}
+
+// gitEnv uses gh/git credential helper when token is empty (host gh auth setup-git).
+func gitEnv(token string) []string {
+	if token != "" {
+		return append(os.Environ(), githubauth.ConfigureGitEnv(token)...)
+	}
+	return os.Environ()
 }

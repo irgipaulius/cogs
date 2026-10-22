@@ -2,10 +2,14 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -28,31 +32,49 @@ func cmdGitHub(args []string) error {
 	case "status":
 		return githubStatus(root)
 	case "logout":
-		return os.Remove(githubauthPath(root))
+		return githubLogout(root)
 	default:
 		return fmt.Errorf("usage: cogs github login|status|logout")
 	}
 }
 
-func githubauthPath(root string) string {
-	return root + "/.cogs/github.json"
+func githubLogout(root string) error {
+	_ = os.Remove(root + "/.cogs/github.json")
+	if bin, err := exec.LookPath("gh"); err == nil {
+		cmd := exec.Command(bin, "auth", "logout", "--hostname", "github.com")
+		_ = cmd.Run()
+	}
+	fmt.Println("GitHub: logged out (host gh + legacy .cogs/github.json)")
+	return nil
 }
 
 func githubStatus(root string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	st, _ := ghcli.Status(ctx)
+	if st.LoggedIn {
+		fmt.Printf("GitHub: signed in as %s (gh)\n", st.Login)
+		return nil
+	}
 	c, err := githubauth.Load(root)
 	if err != nil {
 		return err
 	}
-	if c.Token == "" {
-		fmt.Println("GitHub: not signed in")
-		fmt.Println("Run: cogs github login")
+	if c.Token != "" {
+		who := c.Login
+		if who == "" {
+			who = "(legacy token in .cogs/github.json)"
+		}
+		fmt.Printf("GitHub: signed in as %s (legacy file)\n", who)
 		return nil
 	}
-	who := c.Login
-	if who == "" {
-		who = "(unknown user)"
+	if !st.Installed {
+		fmt.Println("GitHub: gh CLI not installed")
+	} else {
+		fmt.Println("GitHub: not signed in")
 	}
-	fmt.Printf("GitHub: signed in as %s\n", who)
+	fmt.Println("Run: gh auth login && gh auth setup-git")
+	fmt.Println("Or:  cogs github login --token")
 	return nil
 }
 
@@ -84,26 +106,16 @@ func githubLogin(root string, args []string) error {
 		fmt.Printf("Saved token for %s\n", c.Login)
 		return nil
 	}
-	clientID, err := githubauth.ClientID()
-	if err != nil {
-		if globals.Yes {
-			return fmt.Errorf("%w — or set COGS_GITHUB_TOKEN", err)
+	if _, err := exec.LookPath("gh"); err == nil {
+		fmt.Println("Starting gh auth login (device flow)…")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if err := ghcli.LoginDevice(ctx); err != nil {
+			return err
 		}
-		return err
+		st, _ := ghcli.Status(ctx)
+		fmt.Printf("Signed in as %s\n", st.Login)
+		return nil
 	}
-	start, err := githubauth.StartDeviceFlow(clientID)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Open %s\nEnter code: %s\n", start.VerificationURI, start.UserCode)
-	c, err := githubauth.PollDeviceFlow(clientID, start.DeviceCode, start.Interval)
-	if err != nil {
-		return err
-	}
-	if err := githubauth.Save(root, c); err != nil {
-		return err
-	}
-	fmt.Printf("Signed in as %s\n", c.Login)
-	return nil
+	return fmt.Errorf("install GitHub CLI (gh) and run: gh auth login")
 }
-

@@ -139,7 +139,7 @@ export default function App() {
   const [sqlLoading, setSqlLoading] = useState(false);
   const [tables, setTables] = useState([]);
   const [addAppOpen, setAddAppOpen] = useState(false);
-  const [githubSignedIn, setGithubSignedIn] = useState(false);
+  const [authStatus, setAuthStatus] = useState(null);
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -224,9 +224,9 @@ export default function App() {
 
   useEffect(() => {
     if (!me?.is_root) return;
-    api('/api/github/status')
-      .then((st) => setGithubSignedIn(!!st?.signed_in))
-      .catch(() => setGithubSignedIn(false));
+    api('/api/auth/status')
+      .then(setAuthStatus)
+      .catch(() => setAuthStatus(null));
   }, [me, addAppOpen]);
 
   useEffect(() => {
@@ -409,15 +409,16 @@ export default function App() {
             {me.is_root && (
               <>
                 <AddAppTrigger
-                  githubSignedIn={githubSignedIn}
+                  authStatus={authStatus}
                   onClick={() => setAddAppOpen(true)}
                 />
                 <AddAppModal
                   open={addAppOpen}
                   onClose={() => setAddAppOpen(false)}
                   api={api}
+                  authStatus={authStatus}
                   onAdded={() => {
-                    setGithubSignedIn(true);
+                    api('/api/auth/status').then(setAuthStatus);
                     api('/api/metrics/latest').then(setBoard);
                   }}
                 />

@@ -1,62 +1,50 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 )
 
-func TestGitHubLoginStartMissingClientIDReturnsJSON400(t *testing.T) {
-	t.Setenv("COGS_GITHUB_CLIENT_ID", "")
-	s := &Server{WorkspaceRoot: t.TempDir()}
-	user := &adminstore.EffectiveUser{IsRoot: true, Username: "root"}
-	req := httptest.NewRequest(http.MethodPost, "/api/github/login/start", nil)
-	rec := httptest.NewRecorder()
-	s.handleGitHubLoginStart(rec, req, user)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Fatalf("content-type=%q", ct)
-	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body["error"] == "" {
-		t.Fatalf("expected error message, got %v", body)
-	}
-	if strings.HasPrefix(body["error"], "<!DOCTYPE") {
-		t.Fatalf("unexpected HTML error")
-	}
-}
-
-func TestGitHubStatusWithoutSupervisor(t *testing.T) {
+func TestAuthStatusJSONShape(t *testing.T) {
 	dir := t.TempDir()
 	s := &Server{WorkspaceRoot: dir}
 	user := &adminstore.EffectiveUser{IsRoot: true}
-	req := httptest.NewRequest(http.MethodGet, "/api/github/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
 	rec := httptest.NewRecorder()
-	s.handleGitHubStatus(rec, req, user)
+	s.handleAuthStatus(rec, req, user)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var st struct {
-		SignedIn bool `json:"signed_in"`
+		GitHub     map[string]any `json:"github"`
+		Cloudflare map[string]any `json:"cloudflare"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
 		t.Fatal(err)
 	}
-	if st.SignedIn {
-		t.Fatal("expected signed_out")
+	if st.GitHub == nil || st.Cloudflare == nil {
+		t.Fatalf("missing keys: %v", st)
 	}
 }
 
-func TestAddAppRequiresGitHub(t *testing.T) {
+func TestAddAppRequiresGitHubWhenGhLoggedOut(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	gh, err := ghcli.Status(ctx)
+	if err != nil {
+		t.Skip(err)
+	}
+	if gh.LoggedIn {
+		t.Skip("gh logged in on this machine — skip logged-out test")
+	}
 	dir := t.TempDir()
 	s := &Server{WorkspaceRoot: dir}
 	user := &adminstore.EffectiveUser{IsRoot: true}

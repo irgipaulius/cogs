@@ -100,13 +100,12 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 
 | Surface | Command / action |
 |---------|------------------|
-| CLI | `cogs github login` (device flow), `cogs github login --token`, `COGS_GITHUB_TOKEN`, `cogs github status` |
-| Dashboard | **Login with GitHub** (same token file) |
-| Non-interactive | `-y` without token → exit with message to run `cogs github login` |
+| Host (preferred) | `gh auth login && gh auth setup-git` — used by admin **Add app**, `git fetch`, pull-mode Builds |
+| CLI | `cogs github login` (wraps `gh auth login`), `cogs github login --token`, `COGS_GITHUB_TOKEN`, `cogs github status` |
+| Dashboard | Reads host `gh` + `wrangler whoami` via **`GET /api/auth/status`** (no browser OAuth) |
+| Legacy | `.cogs/github.json` token still works if `gh` is not logged in |
 
-Requires env **`COGS_GITHUB_CLIENT_ID`** (public OAuth app client id). Used for `git fetch`, repo list in **Add app**, and pull-mode Builds setup.
-
-Cloudflare GitHub App is **separate** from GitHub OAuth above.
+Cloudflare GitHub App (Workers Builds) is **separate** from host `gh` login.
 
 ## Process supervisor: `cogs up` / `cogs down`
 

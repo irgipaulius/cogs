@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
+	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/supervisor"
 )
 
@@ -20,6 +22,10 @@ type Server struct {
 	Supervisor    *supervisor.Client
 	WorkspaceRoot string
 	SecureCookie  bool
+
+	reposMu    sync.Mutex
+	reposCache []ghcli.Repo
+	reposAt    time.Time
 }
 
 func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
@@ -39,10 +45,8 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("POST /api/sql", s.auth(s.handleSQL))
 	mux.HandleFunc("POST /api/redeploy", s.auth(s.handleRedeploy))
 	mux.HandleFunc("POST /api/rollback", s.auth(s.handleRollback))
-	mux.HandleFunc("GET /api/github/status", s.auth(s.handleGitHubStatus))
-	mux.HandleFunc("POST /api/github/login/start", s.auth(s.handleGitHubLoginStart))
-	mux.HandleFunc("POST /api/github/login/poll", s.auth(s.handleGitHubLoginPoll))
-	mux.HandleFunc("GET /api/github/repos", s.auth(s.handleGitHubRepos))
+	mux.HandleFunc("GET /api/auth/status", s.auth(s.handleAuthStatus))
+	mux.HandleFunc("GET /api/repos", s.auth(s.handleRepos))
 	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
 	mux.HandleFunc("GET /api/users", s.auth(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.auth(s.handleCreateUser))

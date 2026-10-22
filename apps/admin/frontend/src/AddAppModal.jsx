@@ -1,11 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-export function AddAppModal({ open, onClose, api, onAdded }) {
-  const [gh, setGh] = useState(null);
-  const [ghLoading, setGhLoading] = useState(true);
-  const [flow, setFlow] = useState(null);
+export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
   const [repos, setRepos] = useState([]);
   const [reposLoading, setReposLoading] = useState(false);
+  const [repoQuery, setRepoQuery] = useState('');
   const [name, setName] = useState('');
   const [repo, setRepo] = useState('');
   const [mode, setMode] = useState('push');
@@ -14,52 +12,29 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  const refreshGh = useCallback(() => {
-    setGhLoading(true);
-    return api('/api/github/status')
-      .then((st) => setGh(st))
-      .catch(() => setGh({ signed_in: false }))
-      .finally(() => setGhLoading(false));
-  }, [api]);
+  const gh = authStatus?.github;
+  const cf = authStatus?.cloudflare;
+  const ghReady = !!gh?.logged_in;
+  const cfReady = !!cf?.logged_in;
 
   useEffect(() => {
     if (!open) return;
     setErr('');
     setDone(false);
-    setFlow(null);
-    refreshGh();
-  }, [open, refreshGh]);
+    setRepoQuery('');
+  }, [open]);
 
   useEffect(() => {
-    if (!open || !gh?.signed_in) {
+    if (!open || !ghReady) {
       setRepos([]);
       return;
     }
     setReposLoading(true);
-    api('/api/github/repos')
+    api('/api/repos')
       .then(setRepos)
       .catch(() => setRepos([]))
       .finally(() => setReposLoading(false));
-  }, [open, gh?.signed_in, api]);
-
-  useEffect(() => {
-    if (!open || !flow?.device_code) return;
-    const t = setInterval(async () => {
-      try {
-        const st = await api('/api/github/login/poll', {
-          method: 'POST',
-          body: JSON.stringify({ device_code: flow.device_code }),
-        });
-        if (st.signed_in) {
-          setFlow(null);
-          setGh(st);
-        }
-      } catch {
-        /* pending */
-      }
-    }, (flow.interval || 5) * 1000);
-    return () => clearInterval(t);
-  }, [open, flow, api]);
+  }, [open, ghReady, api]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,19 +49,15 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
     };
   }, [open, onClose]);
 
-  async function startLogin() {
-    setErr('');
-    try {
-      const start = await api('/api/github/login/start', { method: 'POST', body: '{}' });
-      setFlow(start);
-    } catch (ex) {
-      setErr(String(ex.message || ex));
-    }
-  }
+  const filteredRepos = useMemo(() => {
+    const q = repoQuery.trim().toLowerCase();
+    if (!q) return repos;
+    return repos.filter((r) => r.full_name?.toLowerCase().includes(q));
+  }, [repos, repoQuery]);
 
   async function submit(e) {
     e.preventDefault();
-    if (!gh?.signed_in) return;
+    if (!ghReady) return;
     setErr('');
     setSubmitting(true);
     try {
@@ -118,8 +89,6 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
 
   if (!open) return null;
 
-  const signedIn = !!gh?.signed_in;
-
   return (
     <div className="modal-root" role="presentation" onClick={onClose}>
       <div
@@ -134,7 +103,7 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
             <p className="modal-eyebrow">Workspace</p>
             <h2 id="add-app-title">Add application</h2>
             <p className="modal-lead">
-              Scaffold a new app from GitHub, register it in the workspace, and run launch.
+              Pick a GitHub repo with <code>cogs.app.toml</code>, register it, and run launch on the server.
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
@@ -142,89 +111,74 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
           </button>
         </header>
 
+        <div className="host-auth-strip">
+          <span className={ghReady ? 'host-auth-ok' : 'host-auth-warn'}>
+            GitHub: {ghReady ? gh.login || 'connected' : gh?.installed ? 'not logged in' : 'gh not installed'}
+          </span>
+          <span className={cfReady ? 'host-auth-ok' : 'host-auth-warn'}>
+            Cloudflare: {cfReady ? cf.email || cf.account_name || 'connected' : cf?.installed ? 'not logged in' : 'wrangler missing'}
+          </span>
+        </div>
+
         {err && <div className="err modal-err">{err}</div>}
         {done && (
           <div className="modal-success">
-            App scaffolded — <code>cogs launch</code> is running in the background on the server.
+            App registered — <code>cogs launch</code> is running in the background on the server.
           </div>
         )}
 
-        {ghLoading ? (
-          <p className="muted modal-pad">Checking GitHub connection…</p>
-        ) : !signedIn ? (
+        {!ghReady ? (
           <section className="modal-section gh-gate">
-            <div className="gh-gate-icon" aria-hidden>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-              </svg>
-            </div>
-            <h3>Connect GitHub first</h3>
+            <h3>Host GitHub login required</h3>
             <p className="muted">
-              CoGS needs repository access to scaffold <code>cogs.app.toml</code>, update{' '}
-              <code>go.work</code>, and configure deploy mode. Sign in once — then you can add apps.
+              The admin dashboard uses the server&apos;s <code>gh</code> login (no OAuth app in the browser). SSH to
+              the CoGS host and run:
             </p>
-            <p className="footnote muted">
-              Requires <code>COGS_GITHUB_CLIENT_ID</code> in the admin server environment (GitHub OAuth
-              App client id).
-            </p>
-            {flow ? (
-              <div className="device-flow">
-                <p className="device-flow-label">Enter this code on GitHub</p>
-                <p className="device-code">{flow.user_code}</p>
-                <a
-                  className="btn btn-primary"
-                  href={flow.verification_uri}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open github.com/login/device
-                </a>
-                <p className="footnote muted">Waiting for authorization…</p>
-              </div>
-            ) : (
-              <button type="button" className="btn btn-primary btn-wide" onClick={startLogin}>
-                Sign in with GitHub
-              </button>
-            )}
+            <pre className="code-block">gh auth login{'\n'}gh auth setup-git</pre>
+            <p className="footnote muted">Or run <code>scripts/bootstrap-host.sh</code> once on the server.</p>
           </section>
         ) : (
           <>
-            <div className="gh-connected">
-              <span className="gh-connected-dot" aria-hidden />
-              Connected as <strong>{gh.login || 'GitHub user'}</strong>
-            </div>
             <form className="modal-form" onSubmit={submit}>
               <div className="form-field">
-                <label htmlFor="add-app-id">App id</label>
-                <span className="field-hint">Workspace name — lowercase, no spaces</span>
+                <label htmlFor="add-app-repo">Repository</label>
                 <input
-                  id="add-app-id"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="my-app"
-                  pattern="[a-z0-9][a-z0-9-]*"
-                  required
+                  id="add-app-repo-search"
+                  type="search"
+                  placeholder="Filter repositories…"
+                  value={repoQuery}
+                  onChange={(e) => setRepoQuery(e.target.value)}
                   autoComplete="off"
                 />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="add-app-repo">Repository</label>
-                <span className="field-hint">Must exist in your GitHub account</span>
                 <select
                   id="add-app-repo"
                   value={repo}
                   onChange={(e) => setRepo(e.target.value)}
                   required
                   disabled={reposLoading}
+                  size={Math.min(8, Math.max(3, filteredRepos.length))}
                 >
-                  <option value="">{reposLoading ? 'Loading repositories…' : 'Choose a repository'}</option>
-                  {repos.map((r) => (
+                  <option value="">{reposLoading ? 'Loading…' : 'Choose a repository'}</option>
+                  {filteredRepos.map((r) => (
                     <option key={r.id} value={r.full_name}>
                       {r.full_name}
+                      {r.has_cogs_config ? ` · ${r.cogs_hint || 'cogs'}` : ''}
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="add-app-id">App id (optional)</label>
+                <span className="field-hint">Defaults to name in cogs.app.toml</span>
+                <input
+                  id="add-app-id"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="from repo config"
+                  pattern="[a-z0-9][a-z0-9-]*"
+                  autoComplete="off"
+                />
               </div>
 
               <fieldset className="form-field mode-picker">
@@ -250,19 +204,25 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
                       onChange={() => setMode('pull')}
                     />
                     <span className="mode-title">Pull</span>
-                    <span className="mode-desc">Cloudflare Workers Builds ships the UI; host deploys API on success</span>
+                    <span className="mode-desc">Workers Builds ships the UI; host deploys API on success</span>
                   </label>
                 </div>
               </fieldset>
 
+              {!cfReady && mode === 'pull' && (
+                <p className="footnote muted">
+                  Pull mode needs <code>wrangler login</code> on the host for Workers Builds setup during launch.
+                </p>
+              )}
+
               <div className="form-field">
                 <label htmlFor="add-app-sub">UI subdomain</label>
-                <span className="field-hint">Host prefix on your zone — defaults to app id</span>
+                <span className="field-hint">Only when scaffolding; ignored if repo already has config</span>
                 <input
                   id="add-app-sub"
                   value={subdomain}
                   onChange={(e) => setSubdomain(e.target.value)}
-                  placeholder={name.trim() || 'same as app id'}
+                  placeholder={name.trim() || 'from config'}
                   autoComplete="off"
                 />
               </div>
@@ -271,8 +231,8 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
                 <button type="button" className="btn btn-ghost" onClick={onClose} disabled={submitting}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting || done}>
-                  {submitting ? 'Adding…' : 'Add application'}
+                <button type="submit" className="btn btn-primary" disabled={submitting || done || !repo}>
+                  {submitting ? 'Installing…' : 'Install application'}
                 </button>
               </footer>
             </form>
@@ -283,13 +243,14 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
   );
 }
 
-export function AddAppTrigger({ onClick, githubSignedIn }) {
+export function AddAppTrigger({ onClick, authStatus }) {
+  const ghReady = !!authStatus?.github?.logged_in;
   return (
     <div className="apps-toolbar">
       <p className="muted apps-toolbar-hint">
-        {githubSignedIn
-          ? 'Register a new app from a GitHub repository.'
-          : 'Connect GitHub to register new apps from a repository.'}
+        {ghReady
+          ? 'Install an app from a GitHub repository (host gh login).'
+          : 'Run gh auth login on the server to enable repo install.'}
       </p>
       <button type="button" className="btn btn-primary" onClick={onClick}>
         Add application
