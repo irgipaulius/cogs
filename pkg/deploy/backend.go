@@ -100,7 +100,9 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	if err := goBuild(ctx, buildDir, outBin); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
-	if err := healthCheck(ctx, buildDir, outBin); err != nil {
+	// Smoke-test the candidate from the live app dir: .env (gitignored, so absent
+	// from the worktree) and relative data paths resolve exactly as after restart.
+	if err := healthCheck(ctx, appDir, outBin); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
 	prev, _ := release.ReadCurrent(wsRoot, appID)
