@@ -83,7 +83,7 @@ Usage:
   cogs github login|status|logout     host gh auth (or PAT via --token)
   cogs <app|path>                     launch when path or workspace app name resolves
   cogs deploy [--app NAME]... [--ping] [--dry-run]
-              deploy all apps (claims runner, drops stale tunnel connectors)
+              deploy all apps on this host
   cogs deploy --remote <user@host> [--target os/arch]
   cogs ping [app|path] [--link] [--url URL]
   Global: --json --dry-run -q --verbose --no-color
