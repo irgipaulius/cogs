@@ -64,10 +64,14 @@ func Load(envFile string) (App, error) {
 			vars[k] = v
 		}
 	}
+	listenOverride := strings.TrimSpace(os.Getenv("COGS_LISTEN"))
 	if envFile != "" {
 		if err := overlayFileOptional(envFile, vars); err != nil {
 			return App{}, err
 		}
+	}
+	if listenOverride != "" {
+		vars["COGS_LISTEN"] = listenOverride
 	}
 	return parse(vars)
 }

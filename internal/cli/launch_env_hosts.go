@@ -8,6 +8,20 @@ import (
 )
 
 // hostsFromEnv returns page and API hostnames from an existing .env when set.
+func listenFromEnv(envPath string) (listen string, ok bool) {
+	b, err := os.ReadFile(envPath)
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "COGS_LISTEN=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "COGS_LISTEN=")), true
+		}
+	}
+	return "", false
+}
+
 func hostsFromEnv(envPath string) (pageHost, apiHost string, ok bool) {
 	b, err := os.ReadFile(envPath)
 	if err != nil {

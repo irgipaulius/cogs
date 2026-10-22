@@ -104,6 +104,16 @@ func doctorOne(dir string, a workspace.App, goWork string) []doctorFinding {
 			wantAPI = wantPage
 		}
 		envPath := filepath.Join(dir, ".env")
+		if listen, ok := listenFromEnv(envPath); ok {
+			host, _, err := net.SplitHostPort(listen)
+			if err == nil && host != "127.0.0.1" && host != "localhost" && host != "::1" {
+				out = append(out, doctorFinding{
+					App: app, OK: false,
+					Problem: fmt.Sprintf("COGS_LISTEN=%s binds beyond loopback", listen),
+					Fix:     "use bind_host in cogs.app.toml and COGS_LISTEN=127.0.0.1:<port>, or set COGS_ALLOW_PUBLIC_BIND=1 if intentional",
+				})
+			}
+		}
 		if page, api, ok := hostsFromEnv(envPath); ok {
 			if page != wantPage || api != wantAPI {
 				out = append(out, doctorFinding{
@@ -150,7 +160,7 @@ func doctorDNS(app, pageHost, apiHost string, combined bool) []doctorFinding {
 	return []doctorFinding{{
 		App: app, OK: false,
 		Problem: host + " CNAME is " + cname,
-		Fix:     "cogs launch " + app + " -y  (expect a CNAME to the tunnel or pages.dev)",
+		Fix:     "cogs launch " + app + " -y  (API CNAME → tunnel; UI → Worker custom domain, not pages.dev)",
 	}}
 }
 

@@ -210,7 +210,6 @@ func healthCheck(ctx context.Context, appDir, bin string) error {
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
-		_ = os.Remove(logPath)
 	}()
 	url := "http://" + addr + "/health"
 	deadline := time.Now().Add(30 * time.Second)
@@ -221,13 +220,27 @@ func healthCheck(ctx context.Context, appDir, bin string) error {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				_ = os.Remove(logPath)
 				return nil
 			}
-			return fmt.Errorf("health %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			return fmt.Errorf("health %d: %s (%s)", resp.StatusCode, strings.TrimSpace(string(body)), tailLogFile(logPath))
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return fmt.Errorf("health check timed out for %s (log %s)", url, logPath)
+	return fmt.Errorf("health check timed out for %s (%s)", url, tailLogFile(logPath))
+}
+
+func tailLogFile(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return "log " + path
+	}
+	const max = 800
+	s := string(b)
+	if len(s) > max {
+		s = s[len(s)-max:]
+	}
+	return "log " + path + ": " + strings.TrimSpace(s)
 }
 
 func defaultRestart(appDir string) func(appDir, binPath string) error {

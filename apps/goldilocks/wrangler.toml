@@ -1,0 +1,10 @@
+name = "cogs-goldilocks"
+compatibility_date = "2024-06-01"
+workers_dev = false
+
+[assets]
+directory = "./public"
+exclude = ["**/*.bak", "**/.DS_Store", "**/config.js.example", "**/.assetsignore"]
+
+# Custom domain pattern is set by Workers Builds env or override at deploy time.
+# Local push uses generated wrangler under .cogs/generated/worker.

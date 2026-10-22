@@ -21,6 +21,10 @@ func supervisorPIDPath(wsRoot string) string {
 }
 
 func startSupervisorBackground(wsRoot string) error {
+	return startSupervisorBackgroundQuiet(wsRoot, false)
+}
+
+func startSupervisorBackgroundQuiet(wsRoot string, quiet bool) error {
 	sock := filepath.Join(wsRoot, ".cogs", "supervisor.sock")
 	if supervisorSocketLive(sock) {
 		return nil
@@ -53,12 +57,38 @@ func startSupervisorBackground(wsRoot string) error {
 	// wait briefly for socket
 	for i := 0; i < 30; i++ {
 		if _, err := os.Stat(sock); err == nil {
-			ux.Info("supervisor started")
+			if !quiet {
+				ux.Info("supervisor started")
+			}
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	return nil
+}
+
+func stopSupervisorBackground(wsRoot string) {
+	pidPath := supervisorPIDPath(wsRoot)
+	b, err := os.ReadFile(pidPath)
+	if err != nil {
+		return
+	}
+	var pid int
+	if _, err := fmt.Sscanf(string(b), "%d", &pid); err != nil || pid <= 0 {
+		return
+	}
+	if proc, err := os.FindProcess(pid); err == nil {
+		_ = proc.Signal(syscall.SIGTERM)
+	}
+	_ = os.Remove(pidPath)
+}
+
+func ensureSupervisorRunning(wsRoot string) {
+	sock := filepath.Join(wsRoot, ".cogs", "supervisor.sock")
+	if supervisorSocketLive(sock) {
+		return
+	}
+	_ = startSupervisorBackgroundQuiet(wsRoot, true)
 }
 
 func supervisorSocketLive(sock string) bool {

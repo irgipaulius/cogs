@@ -89,11 +89,19 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 
 1. Install the **Cloudflare GitHub App** in the dashboard (API cannot do this): Workers & Pages → Builds → Connect.
 2. `cogs github login` (or dashboard **Login with GitHub**) — token in `.cogs/github.json`.
-3. `cogs launch goldilocks -y` — upserts repo connection + Workers Builds trigger (`npm run build`, `npx wrangler deploy`).
-4. Create account queue (e.g. `cogs-deploys`) and **event subscription** for `workersBuilds.worker` `build.succeeded` / `build.failed` → queue.
-5. Set **`COGS_DEPLOY_QUEUE_ID`** (or `COGS_CF_QUEUE_ID`) on the host running **`cogs up --foreground`**.
+3. `cogs launch goldilocks -y` — starts the API first, then best-effort: repo connection, Builds trigger (`npm run build`, `npx wrangler deploy` from `apps/goldilocks/`), queue **`cogs-deploys`**, **HTTP pull consumer**, and build event subscription.
+4. Queue id is written to **`.cogs/boot/cogs-up.env`** as `COGS_DEPLOY_QUEUE_ID=...`. **`cogs up`** sources that file (and `cogs-up.sh` / systemd `EnvironmentFile` / FreeBSD `daemon` wrapper do the same). Restart `cogs up` after launch if it was already running.
 
-`cogs up` polls the queue over HTTPS (outbound only). Match `workerName` + branch to app; success triggers backend-only deploy.
+`cogs up` polls the queue over HTTPS (outbound only). Match `workerName` + branch to app; success triggers backend-only deploy. Pull errors log once per distinct failure (check `.cogs/run/up.log`).
+
+### Migrating UI from Pages to Worker
+
+Split apps no longer use Pages. Before the Worker custom domain will attach:
+
+1. In Cloudflare **Pages**, remove the **custom domain** for the UI hostname (e.g. `todo.<zone>`). Pages ownership blocks the same name on Workers.
+2. Remove any **CNAME** pointing the UI hostname at `*.pages.dev`.
+3. Run `cogs redeploy <app>` (push) or `cogs launch <app> -y` so wrangler deploys static assets with `[[routes]]` + `custom_domain = true` for the UI host.
+4. API hostname stays on the tunnel only (`todo-api.<zone>`).
 
 **Compatibility:** New UI may hit old API for one deploy window — keep API changes backward compatible; dashboard shows a note on pull-mode apps.
 
@@ -118,6 +126,8 @@ cogs down            # stop apps CoGS started
 ```
 
 Boot helpers under `.cogs/boot/` (systemd unit, FreeBSD rc.d, launchd plist, Windows scheduled-task cmd, plus `cogs-up.sh` for cron/Docker).
+
+**`cogs up` also keeps `cogs supervisor run` alive** (admin dashboard). Do not run a legacy per-app watchdog and `cogs up` against the same pidfiles — pick one supervisor. See [freebsd.md](os-guides/freebsd.md).
 
 ## Public admin dashboard
 

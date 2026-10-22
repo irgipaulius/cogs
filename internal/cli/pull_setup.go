@@ -2,15 +2,26 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/boot"
 	"github.com/irgipaulius/cogs/pkg/cfbuilds"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
-func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost string) error {
+func setupPullModeBuildsBestEffort(projectDir string, app appcfg.App, pageHost, apiHost string) {
+	fmt.Println("→ Pull mode (Workers Builds for UI; CoGS deploys backend on build events)")
+	if err := setupPullModeBuilds(projectDir, app, pageHost, apiHost); err != nil {
+		ux.Warn("pull mode setup: " + err.Error())
+	}
+}
+
+func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost string) error {
 	if app.DeployMode != appcfg.DeployPull {
 		return nil
 	}
@@ -23,9 +34,9 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost string) err
 		return err
 	}
 	wsRoot, _, _ := workspace.FindRoot(projectDir)
-	ghTok, err := requireGitHubToken(wsRoot)
-	if err != nil {
-		return err
+	ghTok := githubauth.Token(wsRoot)
+	if ghTok == "" {
+		return fmt.Errorf("GitHub not signed in — run: cogs github login (pull mode UI builds need repo access)")
 	}
 	repos, err := githubauth.ListRepos(ghTok)
 	if err != nil {
@@ -48,7 +59,8 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost string) err
 		return fmt.Errorf("git_repo %q not found in your GitHub account — check cogs.app.toml", repoFull)
 	}
 	client := cfbuilds.Client{AccountID: accountID, Token: token}
-	if err := client.RepoConnection(owner, repoFull, repoID); err != nil {
+	connID, err := client.RepoConnection(owner, repoFull, repoID)
+	if err != nil {
 		if cfbuilds.IsGitHubAppError(err) {
 			return fmt.Errorf("%s\n%s", err.Error(), cfbuilds.GitHubAppMissingHint)
 		}
@@ -58,17 +70,37 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost string) err
 	if worker == "" {
 		worker = app.PagesProject
 	}
+	scriptTag, err := client.WorkerScriptTag(worker)
+	if err != nil {
+		return fmt.Errorf("worker %q: %w (deploy the Worker once or check worker_name)", worker, err)
+	}
 	rootDir := strings.TrimSpace(app.RootDirectory)
 	buildCmd := "npm run build"
 	deployCmd := "npx wrangler deploy"
-	if err := client.Trigger(worker, app.DeployBranch, buildCmd, deployCmd, rootDir); err != nil {
+	if err := client.Trigger(scriptTag, app.DeployBranch, buildCmd, deployCmd, rootDir, connID); err != nil {
 		if cfbuilds.IsGitHubAppError(err) {
 			return fmt.Errorf("%s\n%s", err.Error(), cfbuilds.GitHubAppMissingHint)
 		}
 		return err
 	}
 	fmt.Printf("Pull mode: Workers Builds trigger on %s → %s (branch %s)\n", repoFull, worker, app.DeployBranch)
-	fmt.Printf("Set COGS_DEPLOY_QUEUE_ID to your %q queue id after event subscription.\n", defaultQueueName)
+
+	queueID, err := client.EnsureDeployQueue(defaultQueueName)
+	if err != nil {
+		ux.Warn("deploy queue: " + err.Error())
+	} else {
+		_ = client.EnsureHTTPPullConsumer(queueID)
+		_ = client.EnsureBuildEventSubscription(queueID)
+		envPath := boot.UpEnvPath(wsRoot)
+		if err := boot.WriteUpEnv(wsRoot, map[string]string{"COGS_DEPLOY_QUEUE_ID": queueID}); err != nil {
+			ux.Warn("write " + envPath + ": " + err.Error())
+		} else {
+			fmt.Printf("Wrote %s — restart cogs up to poll build events\n", envPath)
+		}
+	}
 	_ = pageHost
+	_ = apiHost
+	_ = filepath.Base(projectDir)
+	_ = os.Getenv("COGS_DEPLOY_QUEUE_ID")
 	return nil
 }

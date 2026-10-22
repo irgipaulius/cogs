@@ -122,5 +122,48 @@ func LoadDeployments(wsRoot string) (deployFile, error) {
 	if df.Meta == nil {
 		df.Meta = map[string]AppMeta{}
 	}
+	df, migrated := migrateLegacyAppIDs(df)
+	if migrated {
+		_ = saveDeployFile(wsRoot, df)
+	}
 	return df, nil
+}
+
+var legacyAppID = map[string]string{
+	"todo-app":   "todo",
+	"cogs-admin": "admin",
+}
+
+func migrateLegacyAppIDs(df deployFile) (deployFile, bool) {
+	migrated := false
+	if df.Meta == nil {
+		return df, false
+	}
+	newMeta := map[string]AppMeta{}
+	for k, v := range df.Meta {
+		if canon, ok := legacyAppID[k]; ok {
+			v.App = canon
+			newMeta[canon] = v
+			migrated = true
+			continue
+		}
+		newMeta[k] = v
+	}
+	df.Meta = newMeta
+	for i := range df.Events {
+		if canon, ok := legacyAppID[df.Events[i].App]; ok {
+			df.Events[i].App = canon
+			migrated = true
+		}
+	}
+	return df, migrated
+}
+
+func saveDeployFile(wsRoot string, df deployFile) error {
+	b, err := json.MarshalIndent(df, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return os.WriteFile(deployPath(wsRoot), b, 0o644)
 }

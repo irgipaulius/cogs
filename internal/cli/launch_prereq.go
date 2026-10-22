@@ -9,7 +9,11 @@ import (
 )
 
 func needsPublicHostnames(skipPages, skipTunnel bool) bool {
-	return !skipPages || !skipTunnel
+	return !skipTunnel
+}
+
+func needsSplitAPIDNS(skipPages, skipTunnel bool) bool {
+	return !skipTunnel
 }
 
 // explainLaunchNetworking clarifies exposure model from cogs.launch.json.
@@ -24,15 +28,14 @@ func explainLaunchNetworking(m launch.Manifest, pageHost, apiHost string) {
 		fmt.Printf("    %s  →  <tunnel-id>.cfargotunnel.com\n", pageHost)
 		return
 	}
-	fmt.Println("  The browser loads the UI from Cloudflare Pages (static files).")
+	fmt.Println("  The browser loads the UI from a Cloudflare Worker (static assets only).")
 	fmt.Println("  The UI calls your Go API over HTTPS on a separate hostname.")
 	fmt.Println("  Only the API hostname uses the Cloudflare Tunnel to reach this machine.")
 	fmt.Println()
-	fmt.Printf("  Browser ──► https://%s  →  Pages (%s.pages.dev)\n", pageHost, m.PagesProject)
+	fmt.Printf("  Browser ──► https://%s  →  Worker custom domain\n", pageHost)
 	fmt.Printf("  Browser ──► https://%s  →  Tunnel → %s\n", apiHost, local)
 	fmt.Println()
-	fmt.Println("  Two proxied CNAME records on your zone are required (cogs creates them for you):")
-	fmt.Printf("    %s  →  %s.pages.dev\n", pageHost, m.PagesProject)
+	fmt.Println("  wrangler deploy attaches the UI hostname; cogs creates API tunnel DNS:")
 	fmt.Printf("    %s  →  <tunnel-id>.cfargotunnel.com\n", apiHost)
 }
 

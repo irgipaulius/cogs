@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cfqueue"
@@ -13,6 +15,11 @@ import (
 )
 
 const defaultQueueName = "cogs-deploys"
+
+var (
+	queuePullLastErr string
+	queuePullLogMu   sync.Mutex
+)
 
 func pullDeployQueueOnce(root string, ws workspace.Root) {
 	queueID := strings.TrimSpace(os.Getenv("COGS_DEPLOY_QUEUE_ID"))
@@ -24,16 +31,20 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 	}
 	token, err := cfTokenTunnel()
 	if err != nil {
+		logQueuePullErr("queue pull token: " + err.Error())
 		return
 	}
 	accountID, err := cloudflareAccountID()
 	if err != nil {
+		logQueuePullErr("queue pull account: " + err.Error())
 		return
 	}
 	msgs, err := cfqueue.PullBatch(accountID, queueID, token, 10)
 	if err != nil {
+		logQueuePullErr("queue pull: " + err.Error())
 		return
 	}
+	clearQueuePullErr()
 	var acks []string
 	for _, msg := range msgs {
 		ev, ok := cfqueue.ParseBuildEvent(msg.Body)
@@ -63,7 +74,25 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 		}
 		acks = append(acks, msg.ID)
 	}
-	_ = cfqueue.AckBatch(accountID, queueID, token, acks)
+	if err := cfqueue.AckBatch(accountID, queueID, token, acks); err != nil {
+		logQueuePullErr("queue ack: " + err.Error())
+	}
+}
+
+func logQueuePullErr(msg string) {
+	queuePullLogMu.Lock()
+	defer queuePullLogMu.Unlock()
+	if msg == queuePullLastErr {
+		return
+	}
+	queuePullLastErr = msg
+	log.Print(msg)
+}
+
+func clearQueuePullErr() {
+	queuePullLogMu.Lock()
+	queuePullLastErr = ""
+	queuePullLogMu.Unlock()
 }
 
 func matchBuildEvent(root string, ws workspace.Root, ev cfqueue.BuildEvent) (appID, deployBranch string) {

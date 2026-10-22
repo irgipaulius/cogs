@@ -36,7 +36,15 @@ func tunnelNameFromProject(projectDir string) (string, error) {
 	return m.TunnelName, nil
 }
 
+func startTunnelBackgroundQuiet(projectDir, name string) error {
+	return startTunnelBg(projectDir, name, true)
+}
+
 func startTunnelBackground(projectDir, name string) error {
+	return startTunnelBg(projectDir, name, false)
+}
+
+func startTunnelBg(projectDir, name string, quiet bool) error {
 	if projectDir == "" {
 		projectDir = "."
 	}
@@ -48,7 +56,9 @@ func startTunnelBackground(projectDir, name string) error {
 		}
 	}
 	if pid, running := tunnelRunning(projectDir, name); running {
-		fmt.Printf("Tunnel %q already running (pid %d)\n", name, pid)
+		if !quiet {
+			fmt.Printf("Tunnel %q already running (pid %d)\n", name, pid)
+		}
 		return nil
 	}
 	if holder, pid, held := tunnelHeldByOtherApp(projectDir, name); held {

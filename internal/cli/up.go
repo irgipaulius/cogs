@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,10 +38,34 @@ func cmdUp(args []string) error {
 	if err != nil {
 		return fmt.Errorf("cogs up: %w", err)
 	}
+	loadUpEnv(root)
 	if !foreground {
 		return daemonizeUp(root)
 	}
 	return runUp(root, ws, noTunnel)
+}
+
+func loadUpEnv(root string) {
+	path := filepath.Join(root, ".cogs", "boot", "cogs-up.env")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		if k != "" && os.Getenv(k) == "" {
+			_ = os.Setenv(k, v)
+		}
+	}
 }
 
 func cmdDown(args []string) error {
@@ -56,6 +81,7 @@ func cmdDown(args []string) error {
 		return fmt.Errorf("cogs down: %w", err)
 	}
 	stopUpSupervisor(root)
+	stopSupervisorBackground(root)
 	stopWorkspaceApps(root, ws)
 	ux.OK("stopped apps CoGS started")
 	return nil
@@ -110,6 +136,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	if err := writeBootScript(root); err != nil {
 		return err
 	}
+	loadUpEnv(root)
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
 	defer os.Remove(upPIDPath(root))
 
@@ -118,7 +145,9 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 
-	supervise := func() {
+	supervise := func(quiet bool) {
+		reapChildren()
+		ensureSupervisorRunning(root)
 		for _, a := range ws.Apps {
 			dir := filepath.Join(root, a.Path)
 			if _, err := os.Stat(filepath.Join(dir, "cogs.launch.json")); err != nil {
@@ -126,25 +155,34 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 					continue
 				}
 			}
-			if err := ensureAppRunning(dir); err != nil {
+			healthURL := appHealthURL(dir)
+			if _, ok := appRunning(dir); ok {
+				if healthURL != "" && !probeAppHealth(healthURL) {
+					stopApp(dir)
+					if err := ensureAppRunningQuiet(dir); err != nil && !quiet {
+						ux.Warn(a.Name + ": " + err.Error())
+					}
+				}
+				continue
+			}
+			if err := ensureAppRunningQuiet(dir); err != nil && !quiet {
 				ux.Warn(a.Name + ": " + err.Error())
 			}
 			if noTunnel {
 				continue
 			}
-			if err := startTunnelBackground(dir, ""); err != nil {
-				ux.Warn(a.Name + " tunnel: " + err.Error())
-			}
+			_ = startTunnelBackgroundQuiet(dir, "")
 		}
 	}
-	supervise()
+	supervise(false)
 	for {
 		select {
 		case <-sig:
 			stopWorkspaceApps(root, ws)
+			stopSupervisorBackground(root)
 			return nil
 		case <-tick.C:
-			supervise()
+			supervise(true)
 			pullDeployQueueOnce(root, ws)
 		}
 	}
@@ -185,7 +223,7 @@ func appRunningPID(path string) (int, bool) {
 	if _, err := fmt.Sscanf(string(b), "%d", &pid); err != nil || pid <= 0 {
 		return 0, false
 	}
-	if err := syscall.Kill(pid, 0); err != nil {
+	if !processAlive(pid) {
 		return 0, false
 	}
 	return pid, true

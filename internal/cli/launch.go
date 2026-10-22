@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
@@ -91,7 +89,7 @@ func runLaunch(flags launchFlags) error {
 	}
 
 	if flags.quick {
-		fmt.Println("\nQuick redeploy — UI + Pages + migrate + API (skipping D1/R2/tunnel/DNS provisioning)")
+		fmt.Println("\nQuick redeploy — UI + Worker assets + migrate + backend release (skipping D1/R2/tunnel/DNS provisioning)")
 	} else {
 		explainLaunchNetworking(m, pageHost, apiHost)
 	}
@@ -99,7 +97,7 @@ func runLaunch(flags launchFlags) error {
 		explainBlobStorage(abs, m)
 	}
 
-	if !flags.yes {
+	if !flags.yes && !globals.Yes {
 		ok, err := askYesNo("Continue?", true)
 		if err != nil || !ok {
 			return nil
@@ -174,14 +172,7 @@ func runLaunch(flags launchFlags) error {
 			return err
 		}
 		appCfg, _ := appcfg.Load(abs)
-		if appCfg.DeployMode == appcfg.DeployPull {
-			if !flags.quick {
-				fmt.Println("→ Pull mode (Workers Builds for UI; CoGS deploys backend on build events)")
-				if err := setupPullModeBuilds(abs, appCfg, pageHost); err != nil {
-					return err
-				}
-			}
-		} else {
+		if appCfg.DeployMode != appcfg.DeployPull {
 			fmt.Println("→ Worker static assets deploy")
 			if err := deployWorkerStaticAssets(abs, pageHost, m); err != nil {
 				return err
@@ -195,9 +186,9 @@ func runLaunch(flags launchFlags) error {
 			if err := configureCombinedHost(abs, m, pageHost); err != nil {
 				return fmt.Errorf("admin hostname: %w", err)
 			}
-		} else {
-			fmt.Println("→ Custom hostnames (tunnel ingress + DNS CNAMEs + Pages domain)")
-			if err := configurePublicHosts(abs, m, pageHost, apiHost); err != nil {
+		} else if needsSplitAPIDNS(flags.skipPages, flags.skipTunnel) {
+			fmt.Println("→ API hostname (tunnel ingress + DNS)")
+			if err := configureSplitPublicHosts(abs, m, apiHost); err != nil {
 				return fmt.Errorf("public hostnames: %w\nRe-run after fixing DNS, or: cogs tunnel fix --dir %s", err, abs)
 			}
 		}
@@ -234,17 +225,28 @@ func runLaunch(flags launchFlags) error {
 		fmt.Printf("Public UI: https://%s\n", pageHost)
 	}
 
-	switch flags.serveMode {
-	case serveSkip:
-		ux.OK("skipped API serve (--no-serve)")
-	case serveBackground:
-		if flags.quick {
-			if err := deployBackendQuick(abs, m, "redeploy"); err != nil {
-				return err
-			}
-		} else if err := startAppBackground(abs); err != nil {
+	if flags.quick {
+		if err := deployBackendQuick(abs, m, "redeploy"); err != nil {
 			return err
 		}
+	} else {
+		switch flags.serveMode {
+		case serveSkip:
+			ux.OK("skipped API serve (--no-serve)")
+		case serveBackground:
+			if err := startAppBackground(abs); err != nil {
+				return err
+			}
+		case serveForeground:
+			if err := startAppBackground(abs); err != nil {
+				return err
+			}
+		}
+	}
+
+	appCfg, _ := appcfg.Load(abs)
+	if !flags.quick && !m.IsCombined() && appCfg.DeployMode == appcfg.DeployPull {
+		setupPullModeBuildsBestEffort(abs, appCfg, pageHost, apiHost)
 	}
 
 	if !flags.skipTunnel && !flags.noTunnelBG {
@@ -262,16 +264,6 @@ func runLaunch(flags launchFlags) error {
 		}
 	}
 
-	if flags.serveMode == serveForeground {
-		ux.Info("Starting server (Ctrl+C stops app; tunnel keeps running unless you cogs tunnel stop)…")
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			<-sig
-			os.Exit(0)
-		}()
-		return runAppBinary(abs, "serve", "-env", ".env")
-	}
 	if !globals.DryRun {
 		wsRoot, _, _ := workspace.FindRoot(abs)
 		action := "launch"

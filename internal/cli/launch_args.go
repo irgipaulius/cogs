@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -24,7 +25,42 @@ type launchFlags struct {
 	leaseWatch bool
 }
 
+// reorderLaunchArgs puts flags before the first positional so "cogs launch admin -y" works.
+func takesArg(flag string) bool {
+	switch flag {
+	case "--dir", "-dir":
+		return true
+	default:
+		return false
+	}
+}
+
+func reorderLaunchArgs(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	var flags, pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			if takesArg(a) && i+1 < len(args) {
+				flags = append(flags, args[i+1])
+				i++
+			}
+			continue
+		}
+		pos = append(pos, args[i:]...)
+		break
+	}
+	if len(pos) == 0 {
+		return flags
+	}
+	return append(flags, pos...)
+}
+
 func parseLaunchFlags(args []string) (launchFlags, error) {
+	args = reorderLaunchArgs(args)
 	fs := flag.NewFlagSet("launch", flag.ExitOnError)
 	f := launchFlags{}
 	fs.StringVar(&f.dir, "dir", ".", "project directory with cogs.launch.json")

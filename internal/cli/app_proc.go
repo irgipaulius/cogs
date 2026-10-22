@@ -38,7 +38,7 @@ func appRunning(projectDir string) (int, bool) {
 	if err != nil || pid <= 0 {
 		return 0, false
 	}
-	if err := syscall.Kill(pid, 0); err != nil {
+	if !processAlive(pid) {
 		_ = os.Remove(appPIDPath(projectDir))
 		return 0, false
 	}
@@ -57,17 +57,23 @@ func stopApp(projectDir string) {
 }
 
 func startAppBackground(projectDir string) error {
-	return startAppProcess(projectDir, true)
+	return startAppProcess(projectDir, true, false)
 }
 
 // ensureAppRunning starts the built binary when it is down. It rebuilds only if the binary is missing.
 func ensureAppRunning(projectDir string) error {
-	return startAppProcess(projectDir, false)
+	return startAppProcess(projectDir, false, false)
 }
 
-func startAppProcess(projectDir string, rebuild bool) error {
+func ensureAppRunningQuiet(projectDir string) error {
+	return startAppProcess(projectDir, false, true)
+}
+
+func startAppProcess(projectDir string, rebuild, quietIfRunning bool) error {
 	if pid, ok := appRunning(projectDir); ok {
-		ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API already running pid %d", pid))
+		if !quietIfRunning {
+			ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API already running pid %d", pid))
+		}
 		return nil
 	}
 	stopApp(projectDir)

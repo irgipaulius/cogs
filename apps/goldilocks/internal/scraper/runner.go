@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/store"
@@ -18,6 +19,24 @@ type Runner struct {
 	TCPath     string
 	DBPath     string
 	Interval   time.Duration
+}
+
+var pythonMissingLogged bool
+
+func resolvePython() string {
+	if v := strings.TrimSpace(os.Getenv("COGS_PYTHON")); v != "" {
+		return v
+	}
+	for _, name := range []string{"python3", "python3.12", "python3.11", "python3.10"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	if !pythonMissingLogged {
+		pythonMissingLogged = true
+		log.Print("scraper: no python3 on PATH — set COGS_PYTHON or install python3")
+	}
+	return ""
 }
 
 func (r *Runner) Start(ctx context.Context) {
@@ -51,7 +70,10 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	if _, err := os.Stat(r.ScriptPath); err != nil {
 		return nil
 	}
-	py := "python3"
+	py := resolvePython()
+	if py == "" {
+		return nil
+	}
 	args := []string{r.ScriptPath, "--db", r.DBPath}
 	if r.TCPath != "" {
 		args = append(args, "--tc", r.TCPath)
