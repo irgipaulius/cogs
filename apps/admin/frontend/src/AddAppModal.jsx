@@ -16,6 +16,7 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
   const [hosts, setHosts] = useState({});
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [hostCheck, setHostCheck] = useState(null);
   const [advanced, setAdvanced] = useState(false);
   const [err, setErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,7 +61,9 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
     const t = setTimeout(() => {
       setPreviewLoading(true);
       const zq = zone.trim() ? `&zone=${encodeURIComponent(zone.trim())}` : '';
-      api(`/api/repos/preview?q=${encodeURIComponent(q)}${zq}`)
+      const sub = subdomain.trim();
+      const sq = sub ? `&page_subdomain=${encodeURIComponent(sub)}` : '&page_apex=1';
+      api(`/api/repos/preview?q=${encodeURIComponent(q)}${zq}${sq}`)
         .then((data) => {
           setPreview(data.preview);
           setZones(data.zones || []);
@@ -79,7 +82,26 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
         .finally(() => setPreviewLoading(false));
     }, 350);
     return () => clearTimeout(t);
-  }, [open, repo, zone, api]);
+  }, [open, repo, zone, subdomain, api]);
+
+  useEffect(() => {
+    if (!open || !canInstall) return;
+    const z = zone.trim() || preview?.app?.zone || '';
+    if (!z) {
+      setHostCheck(null);
+      return;
+    }
+    const sub = subdomain.trim();
+    const t = setTimeout(() => {
+      const q = sub
+        ? `subdomain=${encodeURIComponent(sub)}&zone=${encodeURIComponent(z)}`
+        : `subdomain=&zone=${encodeURIComponent(z)}&page_apex=1`;
+      api(`/api/hostnames/check?${q}`)
+        .then(setHostCheck)
+        .catch(() => setHostCheck(null));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, canInstall, subdomain, zone, preview, api]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +134,11 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
       setErr(preview?.message || 'Fix repository issues before installing.');
       return;
     }
+    if (hostCheck && !hostCheck.ok) {
+      setErr(hostCheck.error || 'Hostname already in use.');
+      return;
+    }
+    const sub = subdomain.trim();
     setErr('');
     setSubmitting(true);
     try {
@@ -121,7 +148,8 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
           name: name.trim(),
           repo: repoFull,
           deploy_mode: mode,
-          page_subdomain: (subdomain.trim() || name.trim()).toLowerCase(),
+          page_subdomain: sub,
+          page_apex: !sub,
           zone: zone.trim(),
         }),
       });
@@ -229,7 +257,7 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
         {err && <div className="err modal-err">{err}</div>}
         {done && (
           <div className="modal-success">
-            App registered — <code>cogs launch</code> is running in the background on the server.
+            Install started — track progress on the Apps list.
           </div>
         )}
 
@@ -281,43 +309,70 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
           {canInstall && (
             <>
               <div className="form-field">
-                <label htmlFor="add-app-zone">Cloudflare zone</label>
+                <label htmlFor="add-app-sub">Public hostname</label>
                 <span className="field-hint">
-                  Each app can use a different apex domain — set in <code>cogs.app.toml</code> or pick
-                  here (written on install).
+                  Leave subdomain empty for apex (<code>example.com</code>). Overrides{' '}
+                  <code>cogs.app.toml</code> on install.
                 </span>
-                {zones.length > 0 ? (
-                  <select
-                    id="add-app-zone"
-                    value={zone}
-                    onChange={(e) => {
-                      touched.current.zone = true;
-                      setZone(e.target.value);
-                    }}
-                  >
-                    <option value="">From repo config</option>
-                    {zones.map((z) => (
-                      <option key={z} value={z}>
-                        {z}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
+                <div className="hostname-row">
                   <input
-                    id="add-app-zone"
-                    value={zone}
+                    id="add-app-sub"
+                    value={subdomain}
                     onChange={(e) => {
-                      touched.current.zone = true;
-                      setZone(e.target.value.trim());
+                      touched.current.subdomain = true;
+                      setSubdomain(e.target.value.toLowerCase());
                     }}
-                    placeholder={preview?.app?.zone || 'example.com'}
+                    placeholder="app (optional)"
                     autoComplete="off"
+                    aria-label="Subdomain"
                   />
+                  <span className="hostname-dot" aria-hidden>
+                    .
+                  </span>
+                  {zones.length > 0 ? (
+                    <select
+                      id="add-app-zone"
+                      value={zone}
+                      onChange={(e) => {
+                        touched.current.zone = true;
+                        setZone(e.target.value);
+                      }}
+                      aria-label="Zone"
+                    >
+                      <option value="">{preview?.app?.zone || 'Pick zone'}</option>
+                      {zones.map((z) => (
+                        <option key={z} value={z}>
+                          {z}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id="add-app-zone"
+                      value={zone}
+                      onChange={(e) => {
+                        touched.current.zone = true;
+                        setZone(e.target.value.trim());
+                      }}
+                      placeholder={preview?.app?.zone || 'example.com'}
+                      autoComplete="off"
+                      aria-label="Zone"
+                    />
+                  )}
+                </div>
+                {(hosts.page || hostCheck?.hostname) && (
+                  <p className="hostname-preview">
+                    Preview:{' '}
+                    <strong>{hosts.page || `https://${hostCheck?.hostname}`}</strong>
+                  </p>
                 )}
-                {!cfReady && (
+                {hostCheck && !hostCheck.ok && (
+                  <p className="footnote err">{hostCheck.error}</p>
+                )}
+                {!cfReady && zones.length === 0 && (
                   <p className="footnote muted">
-                    Run <code>wrangler login</code> on the host to list zones here; you can still type
-                    the apex domain manually.
+                    Run <code>wrangler login</code> on the host to list zones; you can type the apex
+                    domain manually.
                   </p>
                 )}
               </div>
@@ -378,19 +433,6 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
                       </label>
                     </div>
                   </fieldset>
-                  <div className="form-field">
-                    <label htmlFor="add-app-sub">UI subdomain</label>
-                    <input
-                      id="add-app-sub"
-                      value={subdomain}
-                      onChange={(e) => {
-                        touched.current.subdomain = true;
-                        setSubdomain(e.target.value);
-                      }}
-                      placeholder={preview?.app?.page_subdomain || name}
-                      autoComplete="off"
-                    />
-                  </div>
                 </>
               )}
             </>

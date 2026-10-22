@@ -168,12 +168,17 @@ func (a App) KindManifest() string {
 	return a.Kind
 }
 
-// PageHost is subdomain.zone, or empty when zone is unset.
+// PageHost is subdomain.zone, or the zone apex when page_subdomain is empty.
 func (a App) PageHost() string {
-	if a.Zone == "" || a.PageSubdomain == "" {
+	zone := strings.TrimSpace(a.Zone)
+	if zone == "" {
 		return ""
 	}
-	return a.PageSubdomain + "." + a.Zone
+	sub := strings.TrimSpace(a.PageSubdomain)
+	if sub == "" {
+		return zone
+	}
+	return sub + "." + zone
 }
 
 // APIHost is the public API hostname. Combined apps use the page host.

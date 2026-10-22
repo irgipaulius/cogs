@@ -37,11 +37,11 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 		return "", "", "", fmt.Errorf("repo required (owner/name)")
 	}
 
-	srcRoot, err := materializeRepo(ctx, opts.WSRoot, opts.RepoFull)
+	srcRoot, err := MaterializeRepo(ctx, opts.WSRoot, opts.RepoFull)
 	if err != nil {
 		return "", "", "", err
 	}
-	cfgPath, err := findAppConfig(srcRoot)
+	cfgPath, err := FindAppConfig(srcRoot)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -69,7 +69,7 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 	if strings.HasPrefix(gitRootRel, "..") {
 		gitRootRel = ""
 	}
-	if err := appadd.PatchAppMeta(cfgDir, opts.RepoFull, mode, opts.Zone, opts.PageSubdomain); err != nil {
+	if err := appadd.PatchAppMeta(cfgDir, opts.RepoFull, mode, opts.Zone, opts.PageSubdomain, false); err != nil {
 		return "", "", "", err
 	}
 	detail, err = appadd.RegisterFromDir(opts.WSRoot, name, cfgDir, opts.RepoFull, mode, filepath.ToSlash(gitRootRel))
@@ -86,7 +86,8 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 	return name, appDir, detail, nil
 }
 
-func materializeRepo(ctx context.Context, wsRoot, fullName string) (string, error) {
+// MaterializeRepo clones or updates the repository under .cogs/clones (or returns wsRoot when same origin).
+func MaterializeRepo(ctx context.Context, wsRoot, fullName string) (string, error) {
 	if remote, err := workspaceOrigin(wsRoot); err == nil && repoMatches(remote, fullName) {
 		return wsRoot, nil
 	}
@@ -141,7 +142,8 @@ func isGitCheckout(dir string) bool {
 	return exec.Command("git", "-C", dir, "rev-parse", "HEAD").Run() == nil
 }
 
-func findAppConfig(root string) (string, error) {
+// FindAppConfig locates cogs.app.toml in a checkout.
+func FindAppConfig(root string) (string, error) {
 	if p := filepath.Join(root, appcfg.Filename); fileExists(p) {
 		return p, nil
 	}

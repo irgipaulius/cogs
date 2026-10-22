@@ -141,6 +141,7 @@ export default function App() {
   const [sqlLoading, setSqlLoading] = useState(false);
   const [tables, setTables] = useState([]);
   const [addAppOpen, setAddAppOpen] = useState(false);
+  const [installs, setInstalls] = useState([]);
   const [authStatus, setAuthStatus] = useState(null);
 
   useEffect(() => {
@@ -227,6 +228,23 @@ export default function App() {
   }, [me, panel]);
 
   useEffect(() => {
+    if (!me?.is_root || panel !== 'apps') return;
+    const es = new EventSource('/api/installs/stream');
+    const onInstalls = (ev) => {
+      try {
+        setInstalls(JSON.parse(ev.data));
+      } catch {
+        /* ignore */
+      }
+    };
+    es.addEventListener('installs', onInstalls);
+    api('/api/installs')
+      .then((data) => setInstalls(Array.isArray(data) ? data : []))
+      .catch(() => setInstalls([]));
+    return () => es.close();
+  }, [me, panel]);
+
+  useEffect(() => {
     if (!me?.is_root) return;
     api('/api/auth/status')
       .then(setAuthStatus)
@@ -246,13 +264,52 @@ export default function App() {
     }
   }, [panel, me]);
 
+  const activeInstalls = useMemo(
+    () =>
+      (installs || []).filter(
+        (j) => j.status === 'running' || j.status === 'failed',
+      ),
+    [installs],
+  );
+
+  const installStageLabel = (job) => {
+    const order = [
+      'clone',
+      'discover',
+      'prepare',
+      'register',
+      'build',
+      'launch',
+      'health',
+      'done',
+    ];
+    const labels = {
+      clone: 'Cloning repository',
+      discover: 'Reading configuration',
+      prepare: 'Preparing workspace',
+      register: 'Registering app',
+      build: 'Building backend',
+      launch: 'Provisioning & deploy',
+      health: 'Health check',
+      done: 'Complete',
+    };
+    const cur = job.current_stage || 'clone';
+    const idx = order.indexOf(cur);
+    const n = idx >= 0 ? idx + 1 : 1;
+    return `${labels[cur] || cur} (${n}/${order.length})`;
+  };
+
   const appsList = useMemo(() => {
     const names = new Set();
     (board?.latest?.apps || []).forEach((a) => names.add(a.name));
     Object.keys(board?.deploy_meta || {}).forEach((n) => names.add(n));
     (board?.registry?.apps || []).forEach((a) => names.add(a.app_name));
+    activeInstalls.forEach((j) => {
+      const n = j.app_name || j.request?.name;
+      if (n) names.add(n);
+    });
     return [...names].filter((n) => n !== 'admin').sort();
-  }, [board]);
+  }, [board, activeInstalls]);
 
   const appMeta = (name) => board?.deploy_meta?.[name] || {};
   const appMetrics = (name) => (board?.latest?.apps || []).find((a) => a.name === name) || {};
@@ -434,12 +491,87 @@ export default function App() {
                   onAdded={() => {
                     api('/api/auth/status').then(setAuthStatus);
                     api('/api/metrics/latest').then(setBoard);
+                    api('/api/installs')
+                      .then((data) => setInstalls(Array.isArray(data) ? data : []))
+                      .catch(() => {});
                   }}
                 />
               </>
             )}
             <div className="app-grid">
-              {appsList.map((name) => {
+              {activeInstalls.map((job) => {
+                const label =
+                  job.app_name ||
+                  job.request?.name ||
+                  (job.request?.repo || '').split('/').pop() ||
+                  'Installing…';
+                const failed = job.status === 'failed';
+                return (
+                  <div
+                    key={job.id}
+                    className={`app-card app-card--install${failed ? ' app-card--install-failed' : ''}`}
+                  >
+                    <div className="app-card-head">
+                      <h4>{label}</h4>
+                      <span className={`status-pill ${failed ? 'down' : 'installing'}`}>
+                        {failed ? 'Failed' : 'Installing'}
+                      </span>
+                    </div>
+                    {!failed && (
+                      <div className="install-progress">
+                        <CogsMark size={22} spin />
+                        <span>{installStageLabel(job)}</span>
+                      </div>
+                    )}
+                    {failed && (
+                      <>
+                        <p className="err">{job.error || 'Install failed'}</p>
+                        {job.current_stage && (
+                          <p className="muted">Failed during {job.current_stage}</p>
+                        )}
+                        <div className="install-actions">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() =>
+                              api(`/api/installs/${encodeURIComponent(job.id)}/log`).then((d) => {
+                                const w = window.open('', '_blank');
+                                if (w) {
+                                  w.document.title = `Install ${job.id}`;
+                                  w.document.body.innerHTML = `<pre>${(d.log || '').replace(/</g, '&lt;')}</pre>`;
+                                }
+                              })
+                            }
+                          >
+                            View log
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() =>
+                              api(`/api/installs/${encodeURIComponent(job.id)}/retry`, {
+                                method: 'POST',
+                              }).catch((ex) => alert(ex.message))
+                            }
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              {appsList
+                .filter(
+                  (name) =>
+                    !activeInstalls.some(
+                      (j) =>
+                        (j.app_name || j.request?.name) === name &&
+                        j.status === 'running',
+                    ),
+                )
+                .map((name) => {
                 const m = appMetrics(name);
                 const meta = appMeta(name);
                 const t = appTel(name);

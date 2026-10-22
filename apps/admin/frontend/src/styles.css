@@ -610,6 +610,58 @@ textarea {
   background: rgba(252, 211, 77, 0.08);
 }
 
+.status-pill.installing {
+  color: var(--cyan);
+  border-color: rgba(94, 234, 212, 0.35);
+  background: rgba(94, 234, 212, 0.08);
+}
+
+.app-card--install {
+  cursor: default;
+  border-style: dashed;
+}
+
+.install-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.install-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hostname-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.hostname-row input,
+.hostname-row select {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.hostname-dot {
+  color: var(--text-muted);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.hostname-preview {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 .app-card-stat {
   display: grid;
   gap: 0.35rem;

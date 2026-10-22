@@ -1,16 +1,14 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
-	"os/exec"
-	"time"
+	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
-	"github.com/irgipaulius/cogs/pkg/appadd"
-	"github.com/irgipaulius/cogs/pkg/appinstall"
-	"github.com/irgipaulius/cogs/pkg/hostenv"
+	"github.com/irgipaulius/cogs/pkg/gitpublic"
+	"github.com/irgipaulius/cogs/pkg/hostcheck"
+	"github.com/irgipaulius/cogs/pkg/installjob"
 )
 
 func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
@@ -27,6 +25,7 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		Repo          string `json:"repo"`
 		DeployMode    string `json:"deploy_mode"`
 		PageSubdomain string `json:"page_subdomain"`
+		PageApex      bool   `json:"page_apex"`
 		Zone          string `json:"zone"`
 		ScaffoldOnly  bool   `json:"scaffold_only"`
 	}
@@ -34,52 +33,46 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		writeAPIError(w, http.StatusBadRequest, "bad json")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
-	defer cancel()
-	var detail, appName string
-	var err error
-	if body.ScaffoldOnly {
-		detail, err = appadd.Add(appadd.Options{
-			WSRoot:        s.WorkspaceRoot,
-			Name:          body.Name,
-			GitRepo:       body.Repo,
-			DeployMode:    body.DeployMode,
-			PageSubdomain: body.PageSubdomain,
-		})
-		appName = body.Name
-	} else {
-		appName, _, detail, err = appinstall.Install(ctx, appinstall.Options{
-			WSRoot:        s.WorkspaceRoot,
-			RepoFull:      body.Repo,
-			AppName:       body.Name,
-			DeployMode:    body.DeployMode,
-			PageSubdomain: body.PageSubdomain,
-			Zone:          body.Zone,
-		})
+	pageSub := strings.TrimSpace(body.PageSubdomain)
+	pageApex := body.PageApex
+	if pageApex {
+		pageSub = ""
 	}
+	if err := hostcheck.ValidateSubdomain(pageSub); err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if zone := strings.TrimSpace(body.Zone); zone != "" {
+		if conflict, err := hostcheck.FindPageHostConflict(s.WorkspaceRoot, pageSub, zone, strings.TrimSpace(body.Name)); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		} else if conflict != "" {
+			writeAPIError(w, http.StatusConflict, "hostname already used by app "+conflict)
+			return
+		}
+	}
+
+	mgr := s.ensureInstalls()
+	req := installjob.Request{
+		RepoFull:      gitpublic.NormalizeFullName(body.Repo),
+		AppName:       strings.TrimSpace(body.Name),
+		DeployMode:    body.DeployMode,
+		PageSubdomain: pageSub,
+		PageApex:      pageApex,
+		Zone:          strings.TrimSpace(body.Zone),
+		ScaffoldOnly:  body.ScaffoldOnly,
+	}
+	job, err := mgr.Create(r.Context(), req)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_ = s.Store.WriteAudit(r.Context(), user, "add_app", detail)
-	go runLaunchAfterAdd(s.WorkspaceRoot, appName)
-	writeJSON(w, map[string]string{
-		"detail": detail,
-		"launch": "started in background (cogs launch -y --no-serve)",
+	if s.Store != nil {
+		_ = s.Store.WriteAudit(r.Context(), user, "install_start", job.ID+": "+req.RepoFull)
+	}
+	writeJSON(w, map[string]any{
+		"install_id": job.ID,
+		"app_name":   job.AppName,
+		"status":     job.Status,
 	})
-}
-
-func runLaunchAfterAdd(wsRoot, name string) {
-	appDir, err := appadd.AppDir(wsRoot, name)
-	if err != nil {
-		return
-	}
-	bin, err := exec.LookPath("cogs")
-	if err != nil {
-		return
-	}
-	cmd := exec.Command(bin, "launch", appDir, "-y", "--no-serve")
-	cmd.Dir = wsRoot
-	cmd.Env = append(hostenv.CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
-	_, _ = cmd.CombinedOutput()
 }

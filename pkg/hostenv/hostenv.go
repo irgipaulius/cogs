@@ -2,7 +2,9 @@
 package hostenv
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -42,6 +44,20 @@ func setEnv(env []string, key, val string) []string {
 		out = append(out, e)
 	}
 	return append(out, prefix+val)
+}
+
+// CogsCommandContext runs the host cogs CLI (PATH or go run from workspace root).
+func CogsCommandContext(ctx context.Context, wsRoot string, args ...string) *exec.Cmd {
+	if bin, err := exec.LookPath("cogs"); err == nil {
+		cmd := exec.CommandContext(ctx, bin, args...)
+		cmd.Dir = wsRoot
+		cmd.Env = append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
+		return cmd
+	}
+	cmd := exec.CommandContext(ctx, "go", append([]string{"run", "./cmd/cogs"}, args...)...)
+	cmd.Dir = wsRoot
+	cmd.Env = append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
+	return cmd
 }
 
 // CloneDir returns the standard path for an app's git clone under the workspace.

@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
+	"github.com/irgipaulius/cogs/pkg/installjob"
 )
 
 func TestAuthStatusJSONShape(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{WorkspaceRoot: dir}
+	s := &Server{WorkspaceRoot: dir, Installs: installjob.NewManager(dir)}
 	user := &adminstore.EffectiveUser{IsRoot: true}
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
 	rec := httptest.NewRecorder()
@@ -48,11 +49,12 @@ func TestReposPublicLookupQuery(t *testing.T) {
 
 func TestAddAppWithoutGhAcceptsPublicRepoAttempt(t *testing.T) {
 	dir := t.TempDir()
-	s := &Server{WorkspaceRoot: dir}
+	s := &Server{WorkspaceRoot: dir, Installs: installjob.NewManager(dir)}
 	user := &adminstore.EffectiveUser{IsRoot: true}
 	req := httptest.NewRequest(http.MethodPost, "/api/apps", strings.NewReader(`{"repo":"definitely-not-a-real-owner-xyz/fake-repo-99999"}`))
 	rec := httptest.NewRecorder()
 	s.handleAddApp(rec, req, user)
+	time.Sleep(4 * time.Second)
 	if rec.Code == http.StatusBadRequest {
 		var body map[string]string
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)

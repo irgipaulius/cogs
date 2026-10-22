@@ -45,10 +45,7 @@ func EnsureModule(wsRoot, moduleRel string) error {
 	if moduleRel == "" {
 		return nil
 	}
-	usePath := "./" + strings.TrimPrefix(moduleRel, "./")
-	if !strings.HasPrefix(usePath, "./") {
-		usePath = "./" + usePath
-	}
+	usePath := UsePathFromRoot(wsRoot, moduleRel)
 	modDir := filepath.Join(wsRoot, moduleRel)
 	if _, err := os.Stat(filepath.Join(modDir, "go.mod")); err != nil {
 		return nil
@@ -87,8 +84,10 @@ func SyncFromRepo(wsRoot string) error {
 	p := Path(wsRoot)
 	merged := readUses(p)
 	for _, u := range uses {
-		if !containsUse(merged, u) {
-			merged = append(merged, u)
+		for _, nu := range NormalizeOverlayUses(wsRoot, []string{u}) {
+			if !containsUse(merged, nu) {
+				merged = append(merged, nu)
+			}
 		}
 	}
 	return writeUses(p, merged)
@@ -131,7 +130,7 @@ func writeUses(path string, uses []string) error {
 		uniq = append(uniq, u)
 	}
 	var b strings.Builder
-	b.WriteString("go 1.23\n\nuse (\n")
+	b.WriteString("go 1.23.0\n\nuse (\n")
 	for _, u := range uniq {
 		b.WriteString("\t")
 		b.WriteString(u)
@@ -169,7 +168,7 @@ func ValidateModuleInWork(wsRoot, moduleRel string) error {
 		return nil
 	}
 	uses := readUses(Path(wsRoot))
-	usePath := "./" + filepath.ToSlash(strings.TrimPrefix(moduleRel, "./"))
+	usePath := UsePathFromRoot(wsRoot, moduleRel)
 	if !containsUse(uses, usePath) {
 		return fmt.Errorf("module %s not in %s — run: cogs doctor", usePath, relPath)
 	}

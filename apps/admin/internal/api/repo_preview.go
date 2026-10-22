@@ -52,13 +52,22 @@ func (s *Server) handleRepoPreview(w http.ResponseWriter, r *http.Request, user 
 	if zoneOverride != "" {
 		effectiveZone = zoneOverride
 	}
+	pageSubOverride := strings.TrimSpace(r.URL.Query().Get("page_subdomain"))
+	pageApex := r.URL.Query().Get("page_apex") == "1" || r.URL.Query().Get("page_apex") == "true"
 	hosts := map[string]string{}
 	if preview.App != nil && effectiveZone != "" {
+		pageSub := preview.App.PageSubdomain
+		if pageSubOverride != "" || pageApex {
+			pageSub = pageSubOverride
+		}
+		if pageApex {
+			pageSub = ""
+		}
 		a := appcfg.App{
 			Name:          preview.App.Name,
 			Kind:          preview.App.Kind,
 			Zone:          effectiveZone,
-			PageSubdomain: preview.App.PageSubdomain,
+			PageSubdomain: pageSub,
 			APISubdomain:  preview.App.APISubdomain,
 		}
 		if ph := a.PageHost(); ph != "" {

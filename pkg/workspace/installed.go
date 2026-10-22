@@ -55,6 +55,37 @@ func MergeInstalled(wsRoot string, base Root) Root {
 	return base
 }
 
+// RemoveInstalledApp drops one app from the installed overlay (no-op if missing).
+func RemoveInstalledApp(wsRoot, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return os.ErrInvalid
+	}
+	m := loadInstalled(wsRoot)
+	out := m.Apps[:0]
+	found := false
+	for _, a := range m.Apps {
+		if a.Name == name {
+			found = true
+			continue
+		}
+		out = append(out, a)
+	}
+	if !found {
+		return nil
+	}
+	m.Apps = out
+	if len(m.Apps) == 0 {
+		return os.Remove(installedPath(wsRoot))
+	}
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return os.WriteFile(installedPath(wsRoot), b, 0o644)
+}
+
 // SaveInstalledApp appends or replaces one installed app record.
 func SaveInstalledApp(wsRoot string, rec InstalledApp) error {
 	rec.Name = strings.TrimSpace(rec.Name)

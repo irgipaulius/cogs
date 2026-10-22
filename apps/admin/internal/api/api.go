@@ -11,6 +11,7 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
+	"github.com/irgipaulius/cogs/pkg/installjob"
 	"github.com/irgipaulius/cogs/pkg/supervisor"
 )
 
@@ -26,6 +27,8 @@ type Server struct {
 	reposMu    sync.Mutex
 	reposCache []ghcli.Repo
 	reposAt    time.Time
+
+	Installs *installjob.Manager
 }
 
 func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
@@ -49,6 +52,12 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("GET /api/repos", s.auth(s.handleRepos))
 	mux.HandleFunc("GET /api/repos/preview", s.auth(s.handleRepoPreview))
 	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
+	mux.HandleFunc("GET /api/installs", s.auth(s.handleListInstalls))
+	mux.HandleFunc("GET /api/installs/stream", s.auth(s.handleInstallStream))
+	mux.HandleFunc("GET /api/installs/{id}", s.auth(s.handleGetInstall))
+	mux.HandleFunc("GET /api/installs/{id}/log", s.auth(s.handleInstallLog))
+	mux.HandleFunc("POST /api/installs/{id}/retry", s.auth(s.handleInstallRetry))
+	mux.HandleFunc("GET /api/hostnames/check", s.auth(s.handleHostnameCheck))
 	mux.HandleFunc("GET /api/users", s.auth(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.auth(s.handleCreateUser))
 	mux.HandleFunc("PUT /api/users/{id}/grants", s.auth(s.handleSetGrants))
