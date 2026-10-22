@@ -58,13 +58,25 @@ func TestWriteRCRunsAsCogsUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(b)
-	if !strings.Contains(body, "daemon -u cogs") {
-		t.Fatalf("rc script must run daemon as cogs: %s", body)
+	for _, want := range []string{
+		"/usr/sbin/daemon -f -u cogs --",      // plain daemon as cogs
+		">> '$cogs_up_log' 2>&1",              // output via shell redirect
+		"start|faststart|quietstart)",         // /etc/rc uses faststart at boot
+		"checkyesno cogs_up_enable || exit 0", // respects rcvar
+		"onestart)",
+		"stop|faststop|quietstop|onestop) cogs_up_stop",
+		"restart|onerestart) cogs_up_stop; sleep 2; cogs_up_start",
+		"cogs_up_status",
+		"kill -0",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rc script missing %q:\n%s", want, body)
+		}
 	}
-	if !strings.Contains(body, "cogs_up_status") || !strings.Contains(body, "kill -0") {
-		t.Fatalf("rc script must implement status via pidfile: %s", body)
-	}
-	if !strings.Contains(body, "restart) cogs_up_stop; cogs_up_start") {
-		t.Fatalf("rc script must restart via stop then start: %s", body)
+	// daemon supervisor flags crash with SIGSYS (kqueuex) on TrueNAS CORE hosts.
+	for _, bad := range []string{"daemon -u cogs -p", "-o \"$cogs_up_log\"", "-p \"$pidfile\""} {
+		if strings.Contains(body, bad) {
+			t.Fatalf("rc script must not use %q:\n%s", bad, body)
+		}
 	}
 }

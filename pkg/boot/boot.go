@@ -71,8 +71,11 @@ cogs_up_start() {
 		. "$cogs_up_env"
 		set +a
 	fi
-	/usr/sbin/daemon -u cogs -p "$pidfile" -o "$cogs_up_log" -f -- \
-		/bin/sh -c "cd '$cogs_up_root' && exec '$cogs_up_bin' up --foreground"
+	# Plain daemon -f: the supervisor mode (-p/-o/-r) of a 13.x jail userland calls
+	# kqueuex, which older host kernels (TrueNAS CORE) lack, killing it with SIGSYS.
+	# cogs up writes $pidfile itself.
+	/usr/sbin/daemon -f -u cogs -- \
+		/bin/sh -c "cd '$cogs_up_root' && exec '$cogs_up_bin' up --foreground >> '$cogs_up_log' 2>&1"
 }
 
 cogs_up_stop() {
@@ -99,11 +102,20 @@ cogs_up_status() {
 }
 
 load_rc_config $name
+: ${cogs_up_enable:="NO"}
+
+# /etc/rc calls faststart at boot; honour cogs_up_enable except for one* verbs.
 case "$1" in
-start) cogs_up_start ;;
-stop) cogs_up_stop ;;
-restart) cogs_up_stop; cogs_up_start ;;
-status) cogs_up_status ;;
+start|faststart|quietstart)
+	checkyesno cogs_up_enable || exit 0
+	cogs_up_status >/dev/null 2>&1 && exit 0
+	cogs_up_start ;;
+onestart)
+	cogs_up_status >/dev/null 2>&1 && exit 0
+	cogs_up_start ;;
+stop|faststop|quietstop|onestop) cogs_up_stop ;;
+restart|onerestart) cogs_up_stop; sleep 2; cogs_up_start ;;
+status|onestatus) cogs_up_status ;;
 *) run_rc_command "$1" ;;
 esac
 `, pidFile, logFile, envFile, bin, wsRoot)
