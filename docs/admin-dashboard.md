@@ -48,7 +48,7 @@ Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared e
 ## GitHub and Add app (root only)
 
 1. Set **`COGS_GITHUB_CLIENT_ID`** on the host running admin (OAuth app client id, public).
-2. Dashboard **Login with GitHub** — same token as `cogs github login` → `.cogs/github.json`.
+2. Dashboard **Sign in with GitHub** — same token as `cogs github login` → `.cogs/github.json`. The **admin process** must have **`COGS_GITHUB_CLIENT_ID`** in its environment (not only the supervisor).
 3. **Add app**: pick repo, **push** or **pull** mode, UI subdomain → creates `apps/<name>/cogs.app.toml`, updates `cogs.workspace.json` and `go work use`, runs non-interactive launch.
 
 CLI equivalent: `cogs github login`, then scaffold manually per [deploy.md](deploy.md).

@@ -40,11 +40,23 @@ async function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     ...opts,
   });
-  if (r.status === 401) throw new Error('unauthorized');
-  if (!r.ok) throw new Error(await r.text());
   const ct = r.headers.get('content-type') || '';
-  if (ct.includes('json')) return r.json();
-  return r.text();
+  const isJSON = ct.includes('json');
+  const body = isJSON ? await r.json().catch(() => null) : await r.text();
+  if (r.status === 401) throw new Error('Session expired — sign in again.');
+  if (!r.ok) {
+    if (body && typeof body === 'object' && body.error) {
+      throw new Error(body.error);
+    }
+    if (typeof body === 'string' && body.includes('<!DOCTYPE html>')) {
+      throw new Error(
+        'Admin API unreachable (502). Check cogs-admin is running and the tunnel is healthy.',
+      );
+    }
+    const msg = typeof body === 'string' ? body.trim().slice(0, 400) : JSON.stringify(body);
+    throw new Error(msg || `Request failed (${r.status})`);
+  }
+  return body ?? {};
 }
 
 function fmtBytes(n) {

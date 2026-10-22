@@ -16,9 +16,10 @@ const sessionCookie = "cogs_admin_session"
 
 // Server is the admin HTTP API + SPA shell.
 type Server struct {
-	Store      *adminstore.Store
-	Supervisor *supervisor.Client
-	SecureCookie bool
+	Store         *adminstore.Store
+	Supervisor    *supervisor.Client
+	WorkspaceRoot string
+	SecureCookie  bool
 }
 
 func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
@@ -260,89 +261,6 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request, user *ad
 		return
 	}
 	_ = s.Store.WriteAudit(r.Context(), user, "rollback", body.App)
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(resp.Data)
-}
-
-func (s *Server) handleGitHubStatus(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
-	if !user.IsRoot {
-		http.Error(w, "denied", http.StatusForbidden)
-		return
-	}
-	resp, err := s.supCall(supervisor.Request{Op: "github_status", Session: sessionFromRequest(r)})
-	if err != nil || !resp.OK {
-		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(resp.Data)
-}
-
-func (s *Server) handleGitHubLoginStart(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
-	if !user.IsRoot {
-		http.Error(w, "denied", http.StatusForbidden)
-		return
-	}
-	resp, err := s.supCall(supervisor.Request{Op: "github_login_start", Session: sessionFromRequest(r)})
-	if err != nil || !resp.OK {
-		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(resp.Data)
-}
-
-func (s *Server) handleGitHubLoginPoll(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
-	if !user.IsRoot {
-		http.Error(w, "denied", http.StatusForbidden)
-		return
-	}
-	var body struct {
-		DeviceCode string `json:"device_code"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	raw, _ := json.Marshal(body)
-	resp, err := s.supCall(supervisor.Request{
-		Op: "github_login_poll", Session: sessionFromRequest(r), Raw: raw,
-	})
-	if err != nil || !resp.OK {
-		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(resp.Data)
-}
-
-func (s *Server) handleGitHubRepos(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
-	if !user.IsRoot {
-		http.Error(w, "denied", http.StatusForbidden)
-		return
-	}
-	resp, err := s.supCall(supervisor.Request{Op: "github_repos", Session: sessionFromRequest(r)})
-	if err != nil || !resp.OK {
-		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(resp.Data)
-}
-
-func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
-	if !user.IsRoot {
-		http.Error(w, "denied", http.StatusForbidden)
-		return
-	}
-	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad json", http.StatusBadRequest)
-		return
-	}
-	raw, _ := json.Marshal(body)
-	resp, err := s.supCall(supervisor.Request{Op: "add_app", Session: sessionFromRequest(r), Raw: raw})
-	if err != nil || !resp.OK {
-		http.Error(w, errMsg(resp, err), http.StatusBadGateway)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(resp.Data)
 }

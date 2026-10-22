@@ -97,9 +97,10 @@ func serve(envFile string) error {
 
 	mux := http.NewServeMux()
 	srv := &api.Server{
-		Store:        store,
-		Supervisor:   &supervisor.Client{SocketPath: sock},
-		SecureCookie: strings.HasPrefix(cfg.PublicAPIURL, "https://"),
+		Store:         store,
+		Supervisor:    &supervisor.Client{SocketPath: sock},
+		WorkspaceRoot: wsRoot,
+		SecureCookie:  strings.HasPrefix(cfg.PublicAPIURL, "https://"),
 	}
 	srv.Handler(mux, ui.Handler())
 	tel.RegisterWellKnown(mux)

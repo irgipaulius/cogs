@@ -108,7 +108,7 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
       setTimeout(() => {
         setDone(false);
         onClose();
-      }, 1200);
+      }, 2200);
     } catch (ex) {
       setErr(String(ex.message || ex));
     } finally {
@@ -143,7 +143,11 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
         </header>
 
         {err && <div className="err modal-err">{err}</div>}
-        {done && <div className="modal-success">App added — launch is running in the background.</div>}
+        {done && (
+          <div className="modal-success">
+            App scaffolded — <code>cogs launch</code> is running in the background on the server.
+          </div>
+        )}
 
         {ghLoading ? (
           <p className="muted modal-pad">Checking GitHub connection…</p>
@@ -158,6 +162,10 @@ export function AddAppModal({ open, onClose, api, onAdded }) {
             <p className="muted">
               CoGS needs repository access to scaffold <code>cogs.app.toml</code>, update{' '}
               <code>go.work</code>, and configure deploy mode. Sign in once — then you can add apps.
+            </p>
+            <p className="footnote muted">
+              Requires <code>COGS_GITHUB_CLIENT_ID</code> in the admin server environment (GitHub OAuth
+              App client id).
             </p>
             {flow ? (
               <div className="device-flow">
