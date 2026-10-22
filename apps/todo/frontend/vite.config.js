@@ -7,6 +7,11 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@cogs/brand': path.resolve(root, '../../../docs/brand/react'),
+    },
+  },
   root,
   publicDir: path.join(root, "static"),
   build: {

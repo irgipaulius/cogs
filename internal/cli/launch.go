@@ -11,6 +11,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -382,8 +383,10 @@ func randomHex(n int) (string, error) {
 }
 
 func runGo(dir string, args ...string) error {
+	wsRoot, _, _ := workspace.FindRoot(dir)
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
+	cmd.Env = gowork.AppendEnv(wsRoot, os.Environ())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

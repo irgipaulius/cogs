@@ -48,7 +48,7 @@ func cmdNew(args []string) error {
 	if err := renderTemplate(dest, data); err != nil {
 		return err
 	}
-	gomod := fmt.Sprintf("module %s\n\ngo 1.23\n\nrequire (\n\tgithub.com/irgipaulius/cogs v0.0.0\n\tgithub.com/pressly/goose/v3 v3.24.2\n)\n\nreplace github.com/irgipaulius/cogs => %s\n", mod, cogsRoot)
+	gomod := fmt.Sprintf("module %s\n\ngo 1.23\n\nrequire github.com/pressly/goose/v3 v3.24.2\n", mod)
 	if err := os.WriteFile(filepath.Join(dest, "go.mod"), []byte(gomod), 0o644); err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func cmdNew(args []string) error {
 	git.Dir = dest
 	_ = git.Run()
 	fmt.Printf("created %s (module %s)\n", dest, mod)
-	fmt.Printf("cogs module replace: %s\n", cogsRoot)
+	fmt.Printf("CoGS module root (for local dev): %s — use go.work, not replace directives in go.mod\n", cogsRoot)
 	return nil
 }
 

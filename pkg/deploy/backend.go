@@ -16,6 +16,8 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
+	"github.com/irgipaulius/cogs/pkg/gomod"
+	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/procspawn"
 	"github.com/irgipaulius/cogs/pkg/release"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -49,15 +51,16 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	if err := cfg.Validate(); err != nil {
 		return "", err
 	}
+	gitRoot := workspace.GitRootForApp(wsRoot, appID, cfg.GitRepo)
 	token := githubauth.Token(wsRoot)
 	commit := strings.TrimSpace(opts.Commit)
 	if commit == "" {
-		commit, err = ResolveCommit(ctx, wsRoot, branchRef(cfg.DeployBranch), token)
+		commit, err = ResolveCommit(ctx, gitRoot, branchRef(cfg.DeployBranch), token)
 		if err != nil {
 			return "", err
 		}
 	} else if len(commit) < 40 {
-		full, err := ResolveCommit(ctx, wsRoot, commit, token)
+		full, err := ResolveCommit(ctx, gitRoot, commit, token)
 		if err == nil {
 			commit = full
 		}
@@ -77,7 +80,7 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	}
 	_ = cockpit.RecordDeploy(wsRoot, ev)
 
-	wtRoot, err := ensureWorktree(ctx, wsRoot, appID, commit, token)
+	wtRoot, err := ensureWorktree(ctx, wsRoot, gitRoot, appID, commit, token)
 	if err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
@@ -85,19 +88,24 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	if rel := strings.TrimSpace(cfg.RootDirectory); rel != "" {
 		buildDir = filepath.Join(wtRoot, filepath.FromSlash(rel))
 	} else {
-		// Monorepo: same relative path under worktree.
-		relPath, err := filepath.Rel(wsRoot, appDir)
-		if err == nil && relPath != "." {
+		relPath, err := filepath.Rel(gitRoot, appDir)
+		if err == nil && relPath != "." && !strings.HasPrefix(relPath, "..") {
 			buildDir = filepath.Join(wtRoot, relPath)
 		} else {
-			buildDir = filepath.Join(wtRoot, filepath.Base(appDir))
+			relPath, err = filepath.Rel(wsRoot, appDir)
+			if err == nil && relPath != "." {
+				buildDir = filepath.Join(wtRoot, relPath)
+			}
 		}
+	}
+	if err := gomod.CheckLocalReplace(buildDir); err != nil {
+		return failDeploy(wsRoot, ev, err)
 	}
 	outBin := release.BinaryPath(wsRoot, appID, commit, cfg.Kind == "combined")
 	if err := os.MkdirAll(filepath.Dir(outBin), 0o755); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
-	if err := goBuild(ctx, buildDir, outBin); err != nil {
+	if err := goBuild(ctx, wsRoot, buildDir, outBin); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
 	// Smoke-test the candidate from the live app dir: .env (gitignored, so absent
@@ -172,10 +180,10 @@ func failDeploy(wsRoot string, ev cockpit.DeployEvent, err error) (string, error
 	return ev.Detail, err
 }
 
-func goBuild(ctx context.Context, appDir, outBin string) error {
+func goBuild(ctx context.Context, wsRoot, appDir, outBin string) error {
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outBin, "./cmd/app")
 	cmd.Dir = appDir
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	cmd.Env = gowork.AppendEnv(wsRoot, append(os.Environ(), "CGO_ENABLED=0"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("go build: %w: %s", err, strings.TrimSpace(string(out)))

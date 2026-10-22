@@ -13,6 +13,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { AppDetailView } from './appDetail.jsx';
 import { AddAppModal, AddAppTrigger } from './AddAppModal.jsx';
+import { CogsMark } from './CogsMark.jsx';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -126,6 +127,7 @@ function PageHeader({ title, subtitle }) {
 export default function App() {
   const [{ panel, app: selectedApp, appTab }, setRoute] = useState(parseHash);
   const [me, setMe] = useState(null);
+  const [sessionBooting, setSessionBooting] = useState(true);
   const [loginErr, setLoginErr] = useState('');
   const [board, setBoard] = useState(null);
   const [cpuHist, setCpuHist] = useState([]);
@@ -157,6 +159,8 @@ export default function App() {
       setMe(await api('/api/me'));
     } catch {
       setMe(null);
+    } finally {
+      setSessionBooting(false);
     }
   }, []);
 
@@ -311,12 +315,25 @@ export default function App() {
     );
   }
 
+  if (sessionBooting) {
+    return (
+      <div className="login-wrap session-loading">
+        <CogsMark size={56} spin label="Loading session…" />
+      </div>
+    );
+  }
+
   if (!me) {
     return (
       <div className="login-wrap">
         <form className="login-box" onSubmit={onLogin}>
-          <h1>CoGS</h1>
-          <p className="login-tagline">Mission control</p>
+          <div className="login-brand">
+            <CogsMark size={48} />
+            <div>
+              <h1>CoGS</h1>
+              <p className="login-tagline">Mission control</p>
+            </div>
+          </div>
           {loginErr && <div className="err">{loginErr}</div>}
           <label>Username</label>
           <input name="username" autoComplete="username" required />
@@ -336,7 +353,7 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden />
+          <CogsMark size={28} className="brand-mark" />
           <div className="brand-text">
             <span className="brand-name">CoGS</span>
             <span className="brand-sub">Mission control</span>
@@ -408,10 +425,7 @@ export default function App() {
             <PageHeader title="Apps" subtitle="Workspace services and runtime health" />
             {me.is_root && (
               <>
-                <AddAppTrigger
-                  authStatus={authStatus}
-                  onClick={() => setAddAppOpen(true)}
-                />
+                <AddAppTrigger onClick={() => setAddAppOpen(true)} />
                 <AddAppModal
                   open={addAppOpen}
                   onClose={() => setAddAppOpen(false)}

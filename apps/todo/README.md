@@ -1,3 +1,5 @@
+<p align="center"><img src="../../docs/brand/logo.png" width="280" alt="CoGS" /></p>
+
 # Todo app (CoGS reference)
 
 End-to-end demo: **Worker static UI** → **Cloudflare Tunnel** → **Go + SQLite on your host**, with **localStorage offline queue**, **R2 image uploads**, link perf stats, and stress controls.

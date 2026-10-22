@@ -1,19 +1,18 @@
 package appadd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
-// RegisterFromDir adds an existing app directory (with cogs.app.toml) to the workspace.
-func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode string) (string, error) {
+// RegisterFromDir adds an existing app directory (with cogs.app.toml) to the untracked installed overlay.
+func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode, gitRootRel string) (string, error) {
 	name = strings.TrimSpace(name)
 	appDir, err := filepath.Abs(appDir)
 	if err != nil {
@@ -54,24 +53,22 @@ func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode string) (string, 
 	if err := patchGitMeta(appDir, gitRepo, deployMode); err != nil {
 		return "", err
 	}
-	ws.Apps = append(ws.Apps, workspace.App{
-		Name:        name,
-		Path:        rel,
-		Description: "Installed from GitHub",
-	})
-	b, err := json.MarshalIndent(ws, "", "  ")
-	if err != nil {
+	gitRootRel = filepath.ToSlash(strings.TrimSpace(gitRootRel))
+	if err := workspace.SaveInstalledApp(wsRoot, workspace.InstalledApp{
+		App: workspace.App{
+			Name:        name,
+			Path:        rel,
+			Description: "Installed from GitHub",
+		},
+		GitRepo: strings.TrimSpace(gitRepo),
+		GitRoot: gitRootRel,
+	}); err != nil {
 		return "", err
 	}
-	b = append(b, '\n')
-	if err := os.WriteFile(filepath.Join(wsRoot, workspace.FileName), b, 0o644); err != nil {
-		return "", err
-	}
+	_ = gowork.InitBestEffort(wsRoot)
 	if hasGoMod(appDir) {
-		cmd := exec.Command("go", "work", "use", "./"+rel)
-		cmd.Dir = wsRoot
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("go work use: %w: %s", err, string(out))
+		if err := gowork.EnsureModule(wsRoot, rel); err != nil {
+			return "", err
 		}
 	}
 	return fmt.Sprintf("registered %s at %s", name, rel), nil

@@ -15,6 +15,7 @@
   --ok: #86efac;
   --warn: #fcd34d;
   --err: #f87171;
+  --cogs-orange: #f6821d;
   --radius: 14px;
   --radius-sm: 10px;
   --nav-w: 13.5rem;
@@ -248,13 +249,66 @@ textarea {
   gap: 0.75rem;
 }
 
-.brand-mark {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan-dim), 0 0 24px rgba(94, 234, 212, 0.15);
-  animation: pulse 3s ease-in-out infinite;
+.brand-mark.cogs-mark {
+  flex-shrink: 0;
+}
+
+.cogs-mark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  line-height: 0;
+}
+
+.cogs-mark object,
+.cogs-spinner object,
+.cogs-logo object,
+.cogs-icon object {
+  display: block;
+  pointer-events: none;
+}
+
+.cogs-spinner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  line-height: 0;
+}
+
+.cogs-mark__label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  text-align: center;
+}
+
+.login-brand h1 {
+  margin: 0;
+}
+
+.login-brand .login-tagline {
+  margin: 0.25rem 0 0;
+}
+
+.session-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 40vh;
+  color: var(--text-muted);
 }
 
 @keyframes pulse {
@@ -874,8 +928,10 @@ code {
 .geo-map-loading {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
   pointer-events: none;
 }
 

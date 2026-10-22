@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
 
 // AuthStatus is the current gh login state on this host.
@@ -21,7 +23,7 @@ type AuthStatus struct {
 
 // Repo is one repository visible to the gh login.
 type Repo struct {
-	ID            int64  `json:"id"`
+	ID            string `json:"id"`
 	FullName      string `json:"full_name"`
 	Owner         string `json:"owner"`
 	Name          string `json:"name"`
@@ -41,6 +43,7 @@ func run(ctx context.Context, args ...string) (string, error) {
 		return "", fmt.Errorf("gh not installed — install GitHub CLI (https://cli.github.com/)")
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = hostenv.CLIEnv(os.Getenv("COGS_WORKSPACE_ROOT"))
 	var out, errBuf bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
@@ -112,10 +115,10 @@ func SetupGit(ctx context.Context) error {
 }
 
 type ghRepoRow struct {
-	ID                int64  `json:"databaseId"`
-	NameWithOwner     string `json:"nameWithOwner"`
-	IsPrivate         bool   `json:"isPrivate"`
-	DefaultBranchRef  *struct {
+	ID               string `json:"id"`
+	NameWithOwner    string `json:"nameWithOwner"`
+	IsPrivate        bool   `json:"isPrivate"`
+	DefaultBranchRef *struct {
 		Name string `json:"name"`
 	} `json:"defaultBranchRef"`
 }
@@ -129,7 +132,7 @@ func ListRepos(ctx context.Context) ([]Repo, error) {
 	if !st.LoggedIn {
 		return nil, fmt.Errorf("GitHub not logged in — run: gh auth login")
 	}
-	raw, err := run(ctx, "repo", "list", "--limit", "1000", "--json", "databaseId,nameWithOwner,isPrivate,defaultBranchRef")
+	raw, err := run(ctx, "repo", "list", "--limit", "1000", "--json", "id,nameWithOwner,isPrivate,defaultBranchRef")
 	if err != nil {
 		return nil, err
 	}

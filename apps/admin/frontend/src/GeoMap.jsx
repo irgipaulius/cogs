@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CogsMark } from './CogsMark.jsx';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import worldA2 from './data/world-a2.json';
@@ -214,7 +215,12 @@ export function GeoMap({ statsRead, statsWrite, mode }) {
   return (
     <div className="geo-map-wrap">
       <div ref={containerRef} className="geo-map" role="img" aria-label="World traffic map" />
-      {!mapReady && <div className="geo-map-loading muted">Loading map…</div>}
+      {!mapReady && (
+        <div className="geo-map-loading muted">
+          <CogsMark size={28} spin />
+          <span>Loading map…</span>
+        </div>
+      )}
       <div className="geo-legend muted">
         ISO alpha-2 (CF-IPCountry) · max {maxCount} ({mode === 'write' ? 'writes' : mode === 'read' ? 'reads' : 'all'})
       </div>

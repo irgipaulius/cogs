@@ -102,6 +102,7 @@ func clearQueuePullErr() {
 
 func matchBuildEvent(root string, ws workspace.Root, ev cfqueue.BuildEvent) (appID, deployBranch string) {
 	worker := strings.TrimSpace(ev.WorkerName)
+	repoHint := strings.ToLower(strings.TrimSpace(ev.RepoName))
 	for _, a := range ws.Apps {
 		dir := filepath.Join(root, a.Path)
 		app, err := appcfg.Load(dir)
@@ -112,8 +113,15 @@ func matchBuildEvent(root string, ws workspace.Root, ev cfqueue.BuildEvent) (app
 		if name == "" {
 			name = app.PagesProject
 		}
-		if name != "" && name == worker {
+		if worker != "" && name != "" && name == worker {
 			return a.Name, app.DeployBranch
+		}
+		if repoHint != "" && app.GitRepo != "" {
+			gr := strings.ToLower(app.GitRepo)
+			if strings.Contains(gr, repoHint) || strings.Contains(repoHint, gr) ||
+				strings.HasSuffix(gr, "/"+repoHint) {
+				return a.Name, app.DeployBranch
+			}
 		}
 	}
 	return "", ""

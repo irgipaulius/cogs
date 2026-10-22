@@ -7,8 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"os"
+
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
+	"github.com/irgipaulius/cogs/pkg/gitpublic"
+	"github.com/irgipaulius/cogs/pkg/hostsetup"
 	"github.com/irgipaulius/cogs/pkg/wranglercli"
 )
 
@@ -21,11 +25,20 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request, user *
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
+	if s.WorkspaceRoot != "" {
+		_ = os.Setenv("COGS_WORKSPACE_ROOT", s.WorkspaceRoot)
+	}
 	gh, _ := ghcli.Status(ctx)
 	cf, _ := wranglercli.Status(ctx)
 	writeJSON(w, map[string]any{
 		"github":     gh,
 		"cloudflare": cf,
+		"setup": map[string]any{
+			"cogs_home":               os.Getenv("COGS_HOME"),
+			"github_install_hint":     "cogs host setup  (or: pkg install gh / brew install gh)",
+			"github_login_commands":   hostsetup.GitHubLoginHint(),
+			"wrangler_login_command":  "wrangler login",
+		},
 	})
 }
 
@@ -41,8 +54,9 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request, user *admin
 		writeAPIError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if !gh.LoggedIn {
-		writeAPIError(w, http.StatusBadRequest, "GitHub not logged in on this host — SSH to the server and run: gh auth login && gh auth setup-git")
+		writeJSON(w, publicReposOnly(ctx, q))
 		return
 	}
 	repos, err := s.cachedRepos(ctx)
@@ -50,17 +64,34 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request, user *admin
 		writeAPIError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	if q != "" {
+		qLower := strings.ToLower(q)
 		filtered := repos[:0]
 		for _, repo := range repos {
-			if strings.Contains(strings.ToLower(repo.FullName), q) {
+			if strings.Contains(strings.ToLower(repo.FullName), qLower) {
 				filtered = append(filtered, repo)
 			}
 		}
 		repos = filtered
 	}
 	writeJSON(w, repos)
+}
+
+func publicReposOnly(ctx context.Context, q string) []ghcli.Repo {
+	if full := gitpublic.NormalizeFullName(q); full != "" {
+		pub, err := gitpublic.LookupUnauthenticated(ctx, full)
+		if err != nil {
+			return nil
+		}
+		return []ghcli.Repo{{
+			FullName:      pub.FullName,
+			Private:       false,
+			DefaultBranch: pub.DefaultBranch,
+			HasCogsConfig: pub.HasCogsConfig,
+			CogsHint:      pub.CogsHint,
+		}}
+	}
+	return nil
 }
 
 func (s *Server) cachedRepos(ctx context.Context) ([]ghcli.Repo, error) {

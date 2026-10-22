@@ -11,7 +11,13 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appadd"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
+	"github.com/irgipaulius/cogs/pkg/gitpublic"
+	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
+
+func hostenvClone(wsRoot, fullName string) string {
+	return hostenv.CloneDir(wsRoot, fullName)
+}
 
 // Options for installing an app from a GitHub repository.
 type Options struct {
@@ -25,16 +31,9 @@ type Options struct {
 
 // Install registers the app and returns the workspace app name and directory path.
 func Install(ctx context.Context, opts Options) (name, appDir, detail string, err error) {
-	opts.RepoFull = strings.TrimSpace(opts.RepoFull)
+	opts.RepoFull = gitpublic.NormalizeFullName(opts.RepoFull)
 	if opts.RepoFull == "" {
-		return "", "", "", fmt.Errorf("repo required")
-	}
-	st, err := ghcli.Status(ctx)
-	if err != nil {
-		return "", "", "", err
-	}
-	if !st.LoggedIn {
-		return "", "", "", fmt.Errorf("GitHub not logged in on this host — run: gh auth login")
+		return "", "", "", fmt.Errorf("repo required (owner/name)")
 	}
 
 	srcRoot, err := materializeRepo(ctx, opts.WSRoot, opts.RepoFull)
@@ -65,7 +64,11 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 		mode = "push"
 	}
 
-	detail, err = appadd.RegisterFromDir(opts.WSRoot, name, cfgDir, opts.RepoFull, mode)
+	gitRootRel, _ := filepath.Rel(opts.WSRoot, srcRoot)
+	if strings.HasPrefix(gitRootRel, "..") {
+		gitRootRel = ""
+	}
+	detail, err = appadd.RegisterFromDir(opts.WSRoot, name, cfgDir, opts.RepoFull, mode, filepath.ToSlash(gitRootRel))
 	if err != nil {
 		return "", "", "", err
 	}
@@ -77,27 +80,51 @@ func materializeRepo(ctx context.Context, wsRoot, fullName string) (string, erro
 	if remote, err := workspaceOrigin(wsRoot); err == nil && repoMatches(remote, fullName) {
 		return wsRoot, nil
 	}
-	dest := filepath.Join(wsRoot, ".cogs", "clones", strings.ReplaceAll(fullName, "/", "-"))
+	dest := hostenvClone(wsRoot, fullName)
 	if isGitCheckout(dest) {
-		cmd := exec.CommandContext(ctx, "git", "-C", dest, "pull", "--ff-only")
-		_, _ = cmd.CombinedOutput()
+		if st, _ := ghcli.Status(ctx); st.LoggedIn {
+			cmd := exec.CommandContext(ctx, "git", "-C", dest, "pull", "--ff-only")
+			cmd.Env = hostenv.CLIEnv(wsRoot)
+			_, _ = cmd.CombinedOutput()
+		}
 		return dest, nil
 	}
 	_ = os.RemoveAll(dest)
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+
+	st, _ := ghcli.Status(ctx)
+	if st.LoggedIn {
+		if err := cloneWithGH(ctx, wsRoot, fullName, dest); err == nil {
+			return dest, nil
+		}
+	}
+	if gitpublic.AccessibleWithoutAuth(ctx, fullName) {
+		if err := gitpublic.CloneHTTPS(ctx, fullName, dest); err != nil {
+			return "", err
+		}
+		return dest, nil
+	}
+	if _, err := gitpublic.LookupUnauthenticated(ctx, fullName); err != nil {
 		return "", err
+	}
+	return "", fmt.Errorf("cannot clone %s — run gh auth login on the host for private repositories", fullName)
+}
+
+func cloneWithGH(ctx context.Context, wsRoot, fullName, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
 	}
 	bin, err := exec.LookPath("gh")
 	if err != nil {
-		return "", err
+		return err
 	}
 	cmd := exec.CommandContext(ctx, bin, "repo", "clone", fullName, dest)
 	cmd.Dir = wsRoot
+	cmd.Env = hostenv.CLIEnv(wsRoot)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("gh repo clone: %w: %s", err, string(out))
+		return fmt.Errorf("gh repo clone: %w: %s", err, string(out))
 	}
-	return dest, nil
+	return nil
 }
 
 func isGitCheckout(dir string) bool {

@@ -65,3 +65,4 @@ echo "Installed cogs to ${INSTALL_DIR}/cogs (${tag}, ${goos}/${goarch})"
 if ! echo ":${PATH}:" | grep -q ":${INSTALL_DIR}:"; then
   echo "Add to PATH: export PATH=\"${INSTALL_DIR}:\$PATH\""
 fi
+echo "Next on the server: cogs host setup   (installs gh if needed, gh auth login, wrangler login)"

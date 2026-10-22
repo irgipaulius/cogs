@@ -36,6 +36,7 @@ func FindRoot(startDir string) (rootDir string, root Root, err error) {
 				return "", Root{}, err
 			}
 			r.ApplyDeployDefaults()
+			r = MergeInstalled(dir, r)
 			return dir, r, nil
 		}
 		parent := filepath.Dir(dir)

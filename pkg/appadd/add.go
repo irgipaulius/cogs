@@ -1,14 +1,13 @@
 package appadd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -74,23 +73,20 @@ git_repo = %q
 	if err := os.WriteFile(filepath.Join(appDir, appcfg.Filename), []byte(toml), 0o644); err != nil {
 		return "", err
 	}
-	ws.Apps = append(ws.Apps, workspace.App{
-		Name: opts.Name, Path: "apps/" + opts.Name,
-		Description: "Added from admin dashboard",
-	})
-	b, err := json.MarshalIndent(ws, "", "  ")
-	if err != nil {
+	rel := "apps/" + opts.Name
+	if err := workspace.SaveInstalledApp(opts.WSRoot, workspace.InstalledApp{
+		App: workspace.App{
+			Name: opts.Name, Path: rel,
+			Description: "Added from admin dashboard",
+		},
+		GitRepo: opts.GitRepo,
+		GitRoot: "",
+	}); err != nil {
 		return "", err
 	}
-	b = append(b, '\n')
-	if err := os.WriteFile(filepath.Join(opts.WSRoot, workspace.FileName), b, 0o644); err != nil {
+	_ = gowork.InitBestEffort(opts.WSRoot)
+	if err := gowork.EnsureModule(opts.WSRoot, rel); err != nil {
 		return "", err
-	}
-	rel := "./apps/" + opts.Name
-	cmd := exec.Command("go", "work", "use", rel)
-	cmd.Dir = opts.WSRoot
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("go work use: %w: %s", err, string(out))
 	}
 	return fmt.Sprintf("created %s", appDir), nil
 }

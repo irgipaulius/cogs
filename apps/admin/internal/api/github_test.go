@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
-	"github.com/irgipaulius/cogs/pkg/ghcli"
 )
 
 func TestAuthStatusJSONShape(t *testing.T) {
@@ -35,30 +34,30 @@ func TestAuthStatusJSONShape(t *testing.T) {
 	}
 }
 
-func TestAddAppRequiresGitHubWhenGhLoggedOut(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func TestReposPublicLookupQuery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	gh, err := ghcli.Status(ctx)
-	if err != nil {
-		t.Skip(err)
+	repos := publicReposOnly(ctx, "irgipaulius/cogs")
+	if len(repos) != 1 {
+		t.Fatalf("want 1 public repo, got %d", len(repos))
 	}
-	if gh.LoggedIn {
-		t.Skip("gh logged in on this machine — skip logged-out test")
+	if repos[0].FullName != "irgipaulius/cogs" {
+		t.Fatalf("full_name=%q", repos[0].FullName)
 	}
+}
+
+func TestAddAppWithoutGhAcceptsPublicRepoAttempt(t *testing.T) {
 	dir := t.TempDir()
 	s := &Server{WorkspaceRoot: dir}
 	user := &adminstore.EffectiveUser{IsRoot: true}
-	req := httptest.NewRequest(http.MethodPost, "/api/apps", strings.NewReader(`{"name":"x","repo":"a/b"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/apps", strings.NewReader(`{"repo":"definitely-not-a-real-owner-xyz/fake-repo-99999"}`))
 	rec := httptest.NewRecorder()
 	s.handleAddApp(rec, req, user)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("not json: %s", rec.Body.String())
-	}
-	if !strings.Contains(body["error"], "GitHub") {
-		t.Fatalf("error=%q", body["error"])
+	if rec.Code == http.StatusBadRequest {
+		var body map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if strings.Contains(body["error"], "GitHub not logged in") {
+			t.Fatalf("should not require gh login for install attempt: %q", body["error"])
+		}
 	}
 }

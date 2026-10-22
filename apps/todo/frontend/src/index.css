@@ -36,4 +36,9 @@
   .star-card {
     @apply rounded-2xl border border-white/[0.08] bg-star-panel/80 shadow-panel backdrop-blur-xl;
   }
+
+  .cogs-mark__label,
+  .cogs-spinner .cogs-mark__label {
+    @apply text-xs text-white/50;
+  }
 }

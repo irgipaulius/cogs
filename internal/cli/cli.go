@@ -45,6 +45,8 @@ func Run(args []string) error {
 		return cmdDown(args[1:])
 	case "github":
 		return cmdGitHub(args[1:])
+	case "host":
+		return cmdHost(args[1:])
 	case "cf":
 		return cmdCF(args[1:])
 	case "admin":

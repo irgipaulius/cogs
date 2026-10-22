@@ -10,7 +10,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/appadd"
 	"github.com/irgipaulius/cogs/pkg/appinstall"
-	"github.com/irgipaulius/cogs/pkg/ghcli"
+	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
 
 func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
@@ -35,11 +35,6 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
-	gh, _ := ghcli.Status(ctx)
-	if !gh.LoggedIn {
-		writeAPIError(w, http.StatusBadRequest, "GitHub not logged in on this host — run: gh auth login")
-		return
-	}
 	var detail, appName string
 	var err error
 	if body.ScaffoldOnly {
@@ -83,5 +78,6 @@ func runLaunchAfterAdd(wsRoot, name string) {
 	}
 	cmd := exec.Command(bin, "launch", appDir, "-y", "--no-serve")
 	cmd.Dir = wsRoot
+	cmd.Env = append(hostenv.CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
 	_, _ = cmd.CombinedOutput()
 }

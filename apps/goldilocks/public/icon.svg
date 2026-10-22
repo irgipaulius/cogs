@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CoGS">
+  <title>CoGS</title>
+  <defs>
+    <mask id="cog-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <g transform="translate(34.5 34) rotate(90) scale(1.07) rotate(-18) scale(1.08 0.74) rotate(18)">
+        <g fill="#000" transform="rotate(12)">
+          <ellipse rx="8.3" ry="7.7" transform="rotate(20)"/>
+          <rect x="-3.2" y="-11.2" width="6.4" height="6" rx="2" transform="rotate(0) rotate(-6 0 -9)"/>
+          <rect x="-2.8" y="-10.6" width="5.6" height="5.4" rx="1.8" transform="rotate(58) rotate(8 0 -9)"/>
+          <rect x="-3.1" y="-11.6" width="6.2" height="6.4" rx="2.2" transform="rotate(122) rotate(-4 0 -9)"/>
+          <rect x="-2.9" y="-10.8" width="5.8" height="5.6" rx="1.6" transform="rotate(178) rotate(10 0 -9)"/>
+          <rect x="-3.3" y="-11.4" width="6.6" height="6.2" rx="2.3" transform="rotate(243) rotate(-9 0 -9)"/>
+          <rect x="-2.7" y="-11.2" width="5.4" height="6" rx="1.9" transform="rotate(301) rotate(5 0 -9)"/>
+        </g>
+        <ellipse cx="0.5" cy="-0.3" rx="3.3" ry="2.9" transform="rotate(-25)" fill="#fff"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#F6821D" mask="url(#cog-cut)">
+    <circle cx="22" cy="38" r="10"/>
+    <circle cx="34" cy="30" r="14"/>
+    <circle cx="47" cy="39" r="9"/>
+    <rect x="22" y="38" width="25" height="10"/>
+  </g>
+</svg>

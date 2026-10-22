@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/logo.png" width="320" alt="CoGS" />
+</p>
+
 # CoGS
 
 **Run your app on your own machine. Let Cloudflare handle the internet.**

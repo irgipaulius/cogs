@@ -12,6 +12,7 @@ import (
 var upEnvAllowed = map[string]struct{}{
 	"COGS_DEPLOY_QUEUE_ID": {},
 	"COGS_CF_QUEUE_ID":     {},
+	"COGS_HOME":            {},
 }
 
 // UpEnvPath is where daemonized cogs up reads COGS_DEPLOY_QUEUE_ID and similar.
@@ -87,5 +88,8 @@ func LoadUpEnvIntoProcess(wsRoot string) {
 		if k != "" && os.Getenv(k) == "" {
 			_ = os.Setenv(k, v)
 		}
+	}
+	if h := strings.TrimSpace(os.Getenv("COGS_HOME")); h != "" && os.Getenv("HOME") == "" {
+		_ = os.Setenv("HOME", h)
 	}
 }

@@ -6,9 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
 
 // AuthStatus is wrangler authentication on this host.
@@ -46,6 +49,7 @@ func run(ctx context.Context, args ...string) (string, error) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
+	cmd.Env = hostenv.CLIEnv(os.Getenv("COGS_WORKSPACE_ROOT"))
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%s", strings.TrimSpace(out.String()))
 	}
