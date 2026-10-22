@@ -20,8 +20,6 @@ func Run(args []string) error {
 		return cmdDeploy(args[1:])
 	case "ping":
 		return cmdPing(args[1:])
-	case "lease":
-		return cmdLease(args[1:])
 	case "launch":
 		return cmdLaunch(args[1:])
 	case "redeploy":
@@ -86,7 +84,6 @@ Usage:
   cogs <app|path>                     launch when path or workspace app name resolves
   cogs deploy [--app NAME]... [--ping] [--dry-run]
               deploy all apps (claims runner, drops stale tunnel connectors)
-  cogs lease [watch] [--dir appdir]   yield when a newer deploy claims the public API
   cogs deploy --remote <user@host> [--target os/arch]
   cogs ping [app|path] [--link] [--url URL]
   Global: --json --dry-run -q --verbose --no-color

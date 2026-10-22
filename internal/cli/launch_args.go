@@ -20,9 +20,8 @@ type launchFlags struct {
 	skipUIBuild bool
 	pickZone    bool
 	quick       bool
-	noServe    bool
-	serveMode  serveMode
-	leaseWatch bool
+	noServe     bool
+	serveMode   serveMode
 }
 
 func flagTakesValue(flag string) bool {
@@ -72,9 +71,6 @@ func parseLaunchFlags(args []string) (launchFlags, error) {
 	fs.BoolVar(&f.noServe, "no-serve", false, "migrate/build only; do not start API")
 	bgServe := false
 	fs.BoolVar(&bgServe, "background-serve", false, "start API in background (.cogs/run/app.pid)")
-	fs.BoolVar(&f.leaseWatch, "lease-watch", true, "watch public runner lease and yield to newer deploys")
-	noLeaseWatch := false
-	fs.BoolVar(&noLeaseWatch, "no-lease-watch", false, "disable lease watch")
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
@@ -82,9 +78,6 @@ func parseLaunchFlags(args []string) (launchFlags, error) {
 		f.dir = rest[0]
 	}
 	f.yes = f.yes || globals.Yes
-	if noLeaseWatch {
-		f.leaseWatch = false
-	}
 	if f.noServe {
 		f.serveMode = serveSkip
 	} else if bgServe {

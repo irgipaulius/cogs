@@ -23,18 +23,3 @@ func TestParseDeployLocalPing(t *testing.T) {
 		t.Fatalf("%+v", o)
 	}
 }
-
-func TestParseLeaseArgs(t *testing.T) {
-	dir, err := parseLeaseArgs(nil)
-	if err != nil || dir != "." {
-		t.Fatalf("bare lease: dir=%q err=%v", dir, err)
-	}
-	dir, err = parseLeaseArgs([]string{"watch", "--dir", "apps/todo"})
-	if err != nil || dir != "apps/todo" {
-		t.Fatalf("watch: dir=%q err=%v", dir, err)
-	}
-	dir, err = parseLeaseArgs([]string{"apps/admin"})
-	if err != nil || dir != "apps/admin" {
-		t.Fatalf("dir arg: dir=%q err=%v", dir, err)
-	}
-}

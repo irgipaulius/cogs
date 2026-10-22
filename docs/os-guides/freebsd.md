@@ -30,10 +30,6 @@ sysrc cogs_up_enable=YES
 
 Stop everything: `cogs down`.
 
-### Watchdog vs `cogs up`
-
-Do **not** run the old per-app lease watchdog **and** `cogs up` on the same apps — both will fight over pidfiles and tunnels. Prefer **`cogs up`** for production. Lease watch during `cogs launch` is separate; disable duplicate external watchdogs that restart the same processes.
-
 ## Legacy single-app rc (optional)
 
 Per-app scripts under `cogs service render rcd` still exist for one binary only:

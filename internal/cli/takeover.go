@@ -71,7 +71,7 @@ func applyDeployTakeover(projectDir string, m launch.Manifest) error {
 	if err := disconnectAllTunnelConnectors(m.TunnelName); err != nil {
 		ux.Warn("tunnel disconnect (need Cloudflare Tunnel Write on API token): " + err.Error())
 	} else {
-		ux.OK("cleared remote tunnel connectors (stale hosts will yield via lease watch)")
+		ux.OK("cleared remote tunnel connectors")
 	}
 	_ = stopTunnel(projectDir, m.TunnelName)
 	stopApp(projectDir)

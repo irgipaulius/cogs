@@ -127,7 +127,7 @@ cogs down            # stop apps CoGS started
 
 Boot helpers under `.cogs/boot/` (systemd unit, FreeBSD rc.d, launchd plist, Windows scheduled-task cmd, plus `cogs-up.sh` for cron/Docker).
 
-**`cogs up` also keeps `cogs supervisor run` alive** (admin dashboard). Do not run a legacy per-app watchdog and `cogs up` against the same pidfiles — pick one supervisor. See [freebsd.md](os-guides/freebsd.md).
+**`cogs up` also keeps `cogs supervisor run` alive** (admin dashboard).
 
 ## Public admin dashboard
 

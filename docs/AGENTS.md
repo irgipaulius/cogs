@@ -149,7 +149,7 @@ Use `cogs new` for greenfield outside `apps/`; for this monorepo, copy `apps/tod
 2. `cogs github login` if deploys must fetch private repos.
 3. **`cogs up --foreground`** (or systemd/rc.d/launchd from `.cogs/boot/` after `cogs up` once).
 4. Pull-mode: set **`COGS_DEPLOY_QUEUE_ID`** on that host.
-5. **Tunnel handoff:** `cogs deploy` / launch with tunnel; `COGS_RUNNER_ID` + lease watch; separate prod DB — **`migrate` on prod only**.
+5. **Tunnel handoff:** `cogs deploy` / launch with tunnel; separate prod DB — **`migrate` on prod only**.
 6. Verify: `curl -sS https://todo-api.<zone>/health`, UI on `https://todo.<zone>`.
 7. **Public ops dashboard:** `cogs admin init` → `cogs launch admin -y` → `https://cogs-admin.<zone>`. Per-app `/admin` stays loopback-only.
 

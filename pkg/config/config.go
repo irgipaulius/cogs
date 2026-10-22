@@ -39,7 +39,6 @@ type App struct {
 	LinkPerfMaxBytes  int64
 	RunnerID          string
 	RunnerClaimedAt   string
-	LeaseWatch        bool
 	BlobStore         string
 	BlobDir           string
 	S3Endpoint        string
@@ -147,7 +146,6 @@ func parse(vars map[string]string) (App, error) {
 		LinkPerfMaxBytes:  int64Env(get, "COGS_LINKPERF_MAX_BYTES", 512<<10),
 		RunnerID:          get("COGS_RUNNER_ID"),
 		RunnerClaimedAt:   get("COGS_RUNNER_CLAIMED_AT"),
-		LeaseWatch:        !truthy(get("COGS_LEASE_WATCH_OFF")),
 		BlobStore:         firstNonEmpty(get("COGS_BLOB_STORE"), "fs"),
 		BlobDir:           firstNonEmpty(get("COGS_BLOB_DIR"), "data/blobs"),
 		S3Endpoint:        get("COGS_S3_ENDPOINT"),

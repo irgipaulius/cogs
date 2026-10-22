@@ -258,12 +258,6 @@ func runLaunch(flags launchFlags) error {
 		ux.Info(fmt.Sprintf("Start tunnel when ready: cogs tunnel start %s", m.TunnelName))
 	}
 
-	if flags.leaseWatch && !flags.skipTunnel {
-		if err := startLeaseWatchBackground(abs); err != nil {
-			ux.Warn("lease watch: " + err.Error())
-		}
-	}
-
 	if !globals.DryRun {
 		wsRoot, _, _ := workspace.FindRoot(abs)
 		action := "launch"
