@@ -37,8 +37,6 @@ type App struct {
 	ObsLogPath        string
 	LinkPerf          bool
 	LinkPerfMaxBytes  int64
-	RunnerID          string
-	RunnerClaimedAt   string
 	BlobStore         string
 	BlobDir           string
 	S3Endpoint        string
@@ -144,8 +142,6 @@ func parse(vars map[string]string) (App, error) {
 		ObsLogPath:        get("COGS_OBS_LOG"),
 		LinkPerf:          !truthy(get("COGS_LINKPERF_OFF")),
 		LinkPerfMaxBytes:  int64Env(get, "COGS_LINKPERF_MAX_BYTES", 512<<10),
-		RunnerID:          get("COGS_RUNNER_ID"),
-		RunnerClaimedAt:   get("COGS_RUNNER_CLAIMED_AT"),
 		BlobStore:         firstNonEmpty(get("COGS_BLOB_STORE"), "fs"),
 		BlobDir:           firstNonEmpty(get("COGS_BLOB_DIR"), "data/blobs"),
 		S3Endpoint:        get("COGS_S3_ENDPOINT"),

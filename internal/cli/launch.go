@@ -208,10 +208,10 @@ func runLaunch(flags launchFlags) error {
 		return err
 	}
 
+	// Restart cleanly: stop this host's tunnel and API before serving the new build.
 	if !flags.skipTunnel {
-		if err := applyDeployTakeover(abs, m); err != nil {
-			return err
-		}
+		_ = stopTunnel(abs, m.TunnelName)
+		stopApp(abs)
 	}
 
 	ux.Title("Running locally")

@@ -12,39 +12,32 @@ import (
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/config"
 	"github.com/irgipaulius/cogs/pkg/ingress"
-	"github.com/irgipaulius/cogs/pkg/linkperf"
 	"github.com/irgipaulius/cogs/pkg/limiter"
+	"github.com/irgipaulius/cogs/pkg/linkperf"
 	"github.com/irgipaulius/cogs/pkg/observe"
 	"github.com/irgipaulius/cogs/pkg/session"
 )
 
 // Deps wires handlers and middleware.
 type Deps struct {
-	Config        config.App
-	DB            *sql.DB
-	Session       *session.Manager
-	Access        *accessjwt.Validator
-	IPLimiter     *limiter.LRU
-	TokenLimiter  *limiter.LRU
-	MigrationVer  int64
-	Metrics       http.Handler
-	PrivateOnly   bool
-	Observe       *observe.Runtime
-	Cockpit       *cockpit.Telemetry
-	Ingress       *ingress.Config
+	Config         config.App
+	DB             *sql.DB
+	Session        *session.Manager
+	Access         *accessjwt.Validator
+	IPLimiter      *limiter.LRU
+	TokenLimiter   *limiter.LRU
+	MigrationVer   int64
+	Metrics        http.Handler
+	PrivateOnly    bool
+	Observe        *observe.Runtime
+	Cockpit        *cockpit.Telemetry
+	Ingress        *ingress.Config
 	RegisterRoutes func(mux *http.ServeMux)
 }
 
 // NewMux returns the application handler chain.
 func NewMux(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /.well-known/cogs-runner", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"runner_id":  d.Config.RunnerID,
-			"claimed_at": d.Config.RunnerClaimedAt,
-		})
-	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -54,8 +47,8 @@ func NewMux(d Deps) http.Handler {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":                 true,
-			"migration_version":  d.MigrationVer,
+			"ok":                true,
+			"migration_version": d.MigrationVer,
 		})
 	})
 	if d.Metrics != nil {
@@ -131,7 +124,7 @@ func privateTokenMiddleware(token string) func(http.Handler) http.Handler {
 
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-	 return ip
+		return ip
 	}
 	return r.RemoteAddr
 }
