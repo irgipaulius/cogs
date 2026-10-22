@@ -94,15 +94,6 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 
 `cogs up` polls the queue over HTTPS (outbound only). Match `workerName` + branch to app; success triggers backend-only deploy. Pull errors log once per distinct failure (check `.cogs/run/up.log`).
 
-### Migrating UI from Pages to Worker
-
-Split apps no longer use Pages. Before the Worker custom domain will attach:
-
-1. In Cloudflare **Pages**, remove the **custom domain** for the UI hostname (e.g. `todo.<zone>`). Pages ownership blocks the same name on Workers.
-2. Remove any **CNAME** pointing the UI hostname at `*.pages.dev`.
-3. Run `cogs redeploy <app>` (push) or `cogs launch <app> -y` so wrangler deploys static assets with `[[routes]]` + `custom_domain = true` for the UI host.
-4. API hostname stays on the tunnel only (`todo-api.<zone>`).
-
 **Compatibility:** New UI may hit old API for one deploy window — keep API changes backward compatible; dashboard shows a note on pull-mode apps.
 
 ## GitHub login (workspace)

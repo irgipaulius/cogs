@@ -15,8 +15,6 @@ func cmdCF(args []string) error {
 		return cfR2(args[1:])
 	case "d1":
 		return cfD1(args[1:])
-	case "pages":
-		return cfPages(args[1:])
 	case "worker":
 		return cfWorker(args[1:])
 	case "kv":
@@ -38,14 +36,6 @@ func cfD1(args []string) error {
 		return wrangler("d1", "create", args[1])
 	}
 	return fmt.Errorf("usage: cogs cf d1 create <name>")
-}
-
-func cfPages(args []string) error {
-	if len(args) >= 1 && args[0] == "deploy" {
-		rest := args[1:]
-		return wrangler(append([]string{"pages", "deploy"}, rest...)...)
-	}
-	return fmt.Errorf("usage: cogs cf pages deploy [dir]")
 }
 
 func cfWorker(args []string) error {

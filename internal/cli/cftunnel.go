@@ -252,9 +252,6 @@ func tunnelFix(projectDir string) error {
 	if err := ensureTunnelDNS(projectDir, m.TunnelName, apiHost); err != nil {
 		return err
 	}
-	if pageHost != "" {
-		_ = ensurePagesCustomDomain(projectDir, m.PagesProject, pageHost)
-	}
 	fmt.Println("Done. Test: curl -s https://" + apiHost + "/health")
 	return nil
 }

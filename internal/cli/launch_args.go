@@ -60,7 +60,7 @@ func parseLaunchFlags(args []string) (launchFlags, error) {
 	fs := flag.NewFlagSet("launch", flag.ExitOnError)
 	f := launchFlags{}
 	fs.StringVar(&f.dir, "dir", ".", "project directory with cogs.launch.json")
-	fs.BoolVar(&f.skipPages, "skip-pages", false, "skip Pages deploy")
+	fs.BoolVar(&f.skipPages, "skip-pages", false, "skip UI (Worker static assets) deploy")
 	fs.BoolVar(&f.skipTunnel, "skip-tunnel", false, "skip tunnel DNS setup")
 	fs.BoolVar(&f.noTunnelBG, "no-tunnel-bg", false, "do not start tunnel in background")
 	fs.BoolVar(&f.yes, "yes", false, "skip confirmation prompt")
