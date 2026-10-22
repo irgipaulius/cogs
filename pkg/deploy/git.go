@@ -58,6 +58,12 @@ func ensureWorktree(ctx context.Context, wsRoot, appID, commit, token string) (s
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return "", err
 	}
+	// Queue events carry a full SHA that may be newer than our last fetch.
+	if !hasCommit(ctx, wsRoot, commit) {
+		if err := gitFetchOrigin(ctx, wsRoot, token); err != nil {
+			return "", err
+		}
+	}
 	_ = exec.CommandContext(ctx, "git", "-C", wsRoot, "worktree", "remove", "--force", dir).Run()
 	cmd := exec.CommandContext(ctx, "git", "-C", wsRoot, "worktree", "add", "--detach", dir, commit)
 	cmd.Env = append(os.Environ(), githubauth.ConfigureGitEnv(token)...)
@@ -74,4 +80,8 @@ func branchRef(branch string) string {
 		branch = "main"
 	}
 	return "origin/" + branch
+}
+
+func hasCommit(ctx context.Context, wsRoot, commit string) bool {
+	return exec.CommandContext(ctx, "git", "-C", wsRoot, "cat-file", "-e", commit+"^{commit}").Run() == nil
 }
