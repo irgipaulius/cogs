@@ -39,7 +39,7 @@ CoGS deploys split-app frontends as **assets-only Workers** (no `main` script) v
 For **`deploy_mode = pull`** apps (e.g. goldilocks):
 
 1. Install the **Cloudflare GitHub App** once: dashboard → Workers & Pages → Builds → Connect (the API cannot install it).
-2. `cogs github login` and set **`COGS_GITHUB_CLIENT_ID`**.
+2. On the CoGS host: `gh auth login && gh auth setup-git` and `wrangler login` (or `scripts/bootstrap-host.sh`).
 3. `cogs launch <app> -y` creates repo connection + build trigger.
 4. **`cogs launch <pull-app> -y`** tries to create queue **`cogs-deploys`**, an **HTTP pull consumer**, and event subscriptions (best-effort; API errors are printed).
 5. Queue id lands in **`.cogs/boot/cogs-up.env`**. Restart **`cogs up`** so it loads `COGS_DEPLOY_QUEUE_ID`.

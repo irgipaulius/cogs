@@ -61,7 +61,7 @@ Push to main ──► Workers Builds (npm run build + wrangler deploy)
 
 One path used by push redeploy, pull queue success, dashboard **Redeploy**, and **Rollback**:
 
-1. `git fetch` (uses workspace `.cogs/github.json` token when set).
+1. `git fetch` (uses host **`gh`** git credentials, or a bearer token when configured for git).
 2. Detached **worktree** at `.cogs/worktrees/<app>/<commit>/` — live tree is not reset.
 3. `go build` → `.cogs/releases/<app>/<full-sha>/cogs-app` (or `cogs-admin` for combined).
 4. Start binary on ephemeral port, `GET /health`, then write **`current`** (and move old `current` to **`previous`**) as **text files** (Windows-safe).
@@ -88,7 +88,7 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 **Goldilocks** uses pull mode. One-time (and after repo changes):
 
 1. Install the **Cloudflare GitHub App** in the dashboard (API cannot do this): Workers & Pages → Builds → Connect.
-2. `cogs github login` (or dashboard **Login with GitHub**) — token in `.cogs/github.json`.
+2. On the **CoGS host** (same user as `cogs up` / admin): `gh auth login && gh auth setup-git` so Builds setup can resolve the repo (see [GitHub access](#github-access-workspace)).
 3. `cogs launch goldilocks -y` (flags after the app name work too: `cogs launch goldilocks -y`) — starts the API, deploys the Worker UI once with the real API hostname in `public/config.js`, then: repo connection, Builds trigger (`COGS_PUBLIC_API_URL=… npm run build`, `npx wrangler deploy` from `apps/goldilocks/`), queue **`cogs-deploys`**, **HTTP pull consumer**, and per-worker build event subscription.
 4. Queue id is written to **`.cogs/boot/cogs-up.env`** as `COGS_DEPLOY_QUEUE_ID=...` (only supervisor keys — do not put `COGS_LISTEN` there). **`cogs up`** loads whitelisted keys from that file (boot scripts source the same file). Restart `cogs up` after launch if it was already running.
 
@@ -96,16 +96,23 @@ Worker config is generated under `apps/todo/.cogs/generated/worker/wrangler.toml
 
 **Compatibility:** New UI may hit old API for one deploy window — keep API changes backward compatible; dashboard shows a note on pull-mode apps.
 
-## GitHub login (workspace)
+## GitHub access (workspace)
 
-| Surface | Command / action |
-|---------|------------------|
-| Host (preferred) | `gh auth login && gh auth setup-git` — used by admin **Add app**, `git fetch`, pull-mode Builds |
-| CLI | `cogs github login` (wraps `gh auth login`), `cogs github login --token`, `COGS_GITHUB_TOKEN`, `cogs github status` |
-| Dashboard | Reads host `gh` + `wrangler whoami` via **`GET /api/auth/status`** (no browser OAuth) |
-| Legacy | `.cogs/github.json` token still works if `gh` is not logged in |
+All GitHub access is **host-level** via the [GitHub CLI](https://cli.github.com/) (`gh`). There is no dashboard OAuth app and no `COGS_GITHUB_CLIENT_ID` for admin.
 
-Cloudflare GitHub App (Workers Builds) is **separate** from host `gh` login.
+| Need | What to run |
+|------|-------------|
+| Private repos, `git fetch`, pull-mode Builds repo id | `gh auth login && gh auth setup-git` on the CoGS host |
+| One-time host prep (GitHub + Cloudflare) | `scripts/bootstrap-host.sh` |
+| Check from shell | `cogs github status` or `gh auth status` |
+| Convenience wrapper | `cogs github login` (runs `gh auth login` when `gh` is installed) |
+| Paste a PAT (automation) | `COGS_GITHUB_TOKEN=… cogs github login --token` |
+
+**Admin dashboard (root):** **`GET /api/auth/status`** reports GitHub + Cloudflare login from the host; **`GET /api/repos`** lists repos via `gh repo list`; **`POST /api/apps`** clones (or uses the workspace checkout), registers **`cogs.app.toml`**, and starts **`cogs launch -y --no-serve`** in the background. Details: [admin-dashboard.md](admin-dashboard.md).
+
+**Private repos:** log in as a GitHub user who can see the repo (org SSO authorized if required). Run `gh` as the **same OS user** that runs admin and **`cogs up`**.
+
+The **Cloudflare GitHub App** (Workers Builds) is separate — install it in the Cloudflare dashboard; it does not replace host `gh` login.
 
 ## Process supervisor: `cogs up` / `cogs down`
 
@@ -121,9 +128,9 @@ Boot helpers under `.cogs/boot/` (systemd unit, FreeBSD rc.d, launchd plist, Win
 
 ## Public admin dashboard
 
-See [admin-dashboard.md](admin-dashboard.md). Root users: GitHub login, **Add app** (scaffold + `go work use` + launch), per-app deploy mode / commit / status / log tail, **Redeploy** and **Rollback**.
+See [admin-dashboard.md](admin-dashboard.md). Root users: host **`gh`** / **`wrangler`** status, **Add app** (install from repo + launch), per-app deploy mode / commit / status / log tail, **Redeploy** and **Rollback**.
 
-Supervisor ops (unix socket): `redeploy`, `rollback`, `deploy_status`, `github_login_start`, `github_login_poll`, `github_repos`, `add_app`.
+**Admin HTTP:** `/api/auth/status`, `/api/repos`, `/api/apps` (install). **Supervisor** (unix socket): `redeploy`, `rollback`, `deploy_status`, metrics, SQL, logs.
 
 ## Where is “prod”?
 
@@ -144,7 +151,7 @@ CI/CD is not duplicated inside CoGS: push mode runs builds on the host (or via d
 | Ship backend only (pull app) | Merge to `deploy_branch`; wait for Builds + queue (or manual redeploy backend) |
 | Undo backend | Dashboard Rollback or supervisor `rollback` |
 | Fix config / ports / DNS | `cogs doctor`, `cogs tunnel fix --dir apps/<app>` |
-| GitHub for fetch / Add app | `cogs github login` |
+| GitHub for fetch / Add app | `gh auth login && gh auth setup-git` (or `scripts/bootstrap-host.sh`) |
 | Verify host supervisor | `cogs up --foreground` or `cogs down` then `cogs up` |
 
 When changing deploy behavior in code, **update this file and [AGENTS.md](AGENTS.md)** in the same change.

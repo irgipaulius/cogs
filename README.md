@@ -42,7 +42,7 @@ Think of three layers:
 
 Each app declares **push vs pull** in **`apps/<name>/cogs.app.toml`**. Backends deploy via a shared **release** path (worktree build, health check, `.cogs/releases/<app>/current`). Details: [docs/deploy.md](docs/deploy.md).
 
-The **`cogs` CLI** is the orchestrator: Wrangler, migrations, env files, tunnel lifecycle, **`cogs up`**, and GitHub login for fetch and dashboard **Add app**.
+The **`cogs` CLI** is the orchestrator: Wrangler, migrations, env files, tunnel lifecycle, **`cogs up`**, and host **`gh`** access for `git fetch`, pull-mode Builds, and dashboard **Add app**.
 
 This repo is a **workspace**: several apps can live under `apps/`, listed in `cogs.workspace.json`.
 
@@ -91,7 +91,7 @@ cp .env.example .env    # set COGS_SESSION_SECRET
 go run ./cmd/app serve -env .env
 ```
 
-Add **`cogs.app.toml`**, register the app in `cogs.workspace.json`, `go work use ./apps/myapp`, and run `./cogs launch myapp -y` when you’re ready to go public—or use the **admin dashboard** (Add app) after `cogs github login`.
+Add **`cogs.app.toml`**, register the app in `cogs.workspace.json`, `go work use ./apps/myapp`, and run `./cogs launch myapp -y` when you’re ready to go public—or use the **admin dashboard** (**Add app**) after **`gh auth login`** on the server ([admin-dashboard.md](docs/admin-dashboard.md)).
 
 ---
 
@@ -102,7 +102,7 @@ Add **`cogs.app.toml`**, register the app in `cogs.workspace.json`, `go work use
 | **Pure Go SQLite** | No CGO; easy cross-compile to Linux ARM (NAS) and amd64 |
 | **`cogs launch` / `redeploy` / `up`** | Edge setup vs ship changes vs host supervisor |
 | **Push / pull deploy** | Per-app UI on CoGS or Workers Builds — [deploy.md](docs/deploy.md) |
-| **Admin dashboard** | Redeploy, rollback, GitHub, Add app — [admin-dashboard.md](docs/admin-dashboard.md) |
+| **Admin dashboard** | Redeploy, rollback, install apps from GitHub (host `gh`) — [admin-dashboard.md](docs/admin-dashboard.md) |
 | **Migrations** | Goose + sqlc-friendly layout |
 | **Security helpers** | Turnstile sessions, rate limits, optional Cloudflare Access |
 | **`cogs sync`** | SQLite stays truth; D1/R2 get projections for edge reads |

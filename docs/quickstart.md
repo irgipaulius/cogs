@@ -11,8 +11,9 @@ CoGS (**C**loudflare + **G**o + **S**QLite) is a forkable boilerplate for self-h
 5. **Try the todo demo**: `./cogs launch todo -y` from repo root (Wrangler login + DNS token prompt)
 6. **Ship changes**: `./cogs redeploy todo` (Worker UI + backend release)
 7. **Host supervisor (prod loop)**: `cogs up` — see [deploy.md](deploy.md)
-8. **Build static binary**: `cogs build --target linux/amd64`
-9. **Expose** (pick one):
+8. **Admin Add app / private repos**: `gh auth login` on the server — [admin-dashboard.md](admin-dashboard.md)
+9. **Build static binary**: `cogs build --target linux/amd64`
+10. **Expose** (pick one):
    - Public: `cogs tunnel init api.example.com` + [cloudflare-setup.md](cloudflare-setup.md)
    - Worker-only: `cogs tunnel private` + [worker-client example](../examples/worker-client)
 

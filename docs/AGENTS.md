@@ -1,5 +1,7 @@
 # CoGS agent playbook
 
+**Cursor:** invoke the **`/cogs`** skill (`.cursor/skills/cogs/`) for production context (FreeBSD home server, DevOps agent split) and doc entry points before deep reads.
+
 This document is for **LLM coding agents** operating the [CoGS](https://github.com/irgipaulius/cogs) repo: a **Cloudflare app orchestrator** that runs **Go + SQLite** on the operator’s machine (Mac, NAS, VPS, Docker, FreeBSD, Windows) and uses **Workers (static UI) + Tunnel + D1/R2** at the edge.
 
 Read this before changing launch behavior, adding apps, or deploying remotely.
@@ -66,18 +68,20 @@ Equivalent paths: `apps/todo`, or `./cogs apps/todo` when config is present.
 
 Windows: `scripts/install.ps1` via `irm … | iex`.
 
-## GitHub (workspace token)
+## GitHub (host `gh`)
 
-Many deploy paths **`git fetch`** and pull-mode Builds need a token in **`.cogs/github.json`** (gitignored):
+**`git fetch`**, pull-mode Builds repo lookup, and admin **Add app** use the **GitHub CLI** on the CoGS host:
 
 ```bash
-export COGS_GITHUB_CLIENT_ID=<oauth-app-client-id>
-cogs github login              # device flow
-# or: COGS_GITHUB_TOKEN=… cogs github login --token
-cogs github status
+gh auth login && gh auth setup-git   # same OS user as cogs up / admin
+wrangler login                       # or COGS_CF_API_TOKEN for DNS only
+# optional one-shot: scripts/bootstrap-host.sh
+cogs github status                   # wraps gh + legacy checks
 ```
 
-Dashboard **Login with GitHub** writes the same file. With **`-y`**, missing token must fail with an explicit `cogs github login` message — never hang on prompts.
+Admin reads **`GET /api/auth/status`** and **`GET /api/repos`** — no browser OAuth, no `COGS_GITHUB_CLIENT_ID`. **`POST /api/apps`** installs from a repo (`pkg/appinstall`). With **`-y`**, missing GitHub access must fail with a clear message — never hang on prompts.
+
+Optional automation: **`COGS_GITHUB_TOKEN`** + **`cogs github login --token`** stores a PAT in **`.cogs/github.json`** (gitignored); prefer **`gh auth login`** for interactive hosts.
 
 ## Reference app: `apps/todo` (push)
 
@@ -131,7 +135,7 @@ Backend deploy is always **worktree + release pointer**, not `git pull` + dirty 
 
 ## Adding a new app
 
-**From dashboard (root):** GitHub login → Add app (repo, mode, subdomain) → scaffold + `go work use` + launch.
+**From dashboard (root):** Host `gh` logged in → **Add app** (pick repo, optional app id / deploy mode) → register `cogs.app.toml` + `go work use` when needed + background **`cogs launch -y --no-serve`**.
 
 **Manual:**
 
@@ -146,7 +150,7 @@ Use `cogs new` for greenfield outside `apps/`; for this monorepo, copy `apps/tod
 **Production** = host running **`cogs up`** + releases under `.cogs/releases/` + tunnel, not a special git branch in this repo.
 
 1. Clone repo on server; copy app `.env` securely; never commit `.env`.
-2. `cogs github login` if deploys must fetch private repos.
+2. `gh auth login && gh auth setup-git` if deploys must fetch **private** repos (or use bootstrap script).
 3. **`cogs up --foreground`** (or systemd/rc.d/launchd from `.cogs/boot/` after `cogs up` once).
 4. Pull-mode: set **`COGS_DEPLOY_QUEUE_ID`** on that host.
 5. **Tunnel handoff:** `cogs deploy` / launch with tunnel; separate prod DB — **`migrate` on prod only**.
@@ -171,7 +175,7 @@ If SSH details are unknown, **stop and ask the user** for host, user, arch, and 
 | First-time / infra | `cogs launch todo -y` |
 | Daily ship (push) | `cogs redeploy todo` |
 | Host supervisor | `cogs up` / `cogs down` |
-| GitHub token | `cogs github login` / `status` |
+| GitHub on host | `gh auth status` / `cogs github status` |
 | Health check | `cogs ping todo` |
 | DNS/tunnel repair | `cogs tunnel fix --dir apps/todo` |
 | Doctor | `cogs doctor` (workspace + apps) |

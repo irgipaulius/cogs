@@ -45,3 +45,14 @@ go install github.com/irgipaulius/cogs/cmd/cogs@latest
 ```
 
 Requires a tagged module version on the module proxy.
+
+## Host prerequisites (deploy + admin dashboard)
+
+On the machine that runs **`cogs up`** and the **admin** app:
+
+- [GitHub CLI](https://cli.github.com/) — `gh auth login && gh auth setup-git`
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) — `wrangler login` (or workspace DNS token; see [cloudflare-setup.md](cloudflare-setup.md))
+
+One-shot script from the repo: **`scripts/bootstrap-host.sh`**.
+
+Admin **Add app** and pull-mode Builds require **`gh`** on that host. See [deploy.md](deploy.md) and [admin-dashboard.md](admin-dashboard.md).

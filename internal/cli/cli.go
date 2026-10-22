@@ -80,7 +80,7 @@ Usage:
   cogs build [--target os/arch,...]
   cogs launch [app|path] [-y] [--quick]   provision or fast redeploy
   cogs redeploy [app|path]            launch --quick -y
-  cogs github login|status|logout     workspace GitHub token (device flow)
+  cogs github login|status|logout     host gh auth (or PAT via --token)
   cogs <app|path>                     launch when path or workspace app name resolves
   cogs deploy [--app NAME]... [--ping] [--dry-run]
               deploy all apps (claims runner, drops stale tunnel connectors)

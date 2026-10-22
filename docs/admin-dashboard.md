@@ -6,7 +6,16 @@ Admin is **`kind = combined`** and **`deploy_mode = push` only** — the UI is n
 
 ## First-time setup
 
-1. `npx wrangler login` (or set `COGS_CF_API_TOKEN` for DNS).
+1. On the **server** that will run admin and **`cogs up`**, install and log in CLI tools (once per user):
+
+   ```bash
+   gh auth login && gh auth setup-git
+   wrangler login
+   # or: scripts/bootstrap-host.sh
+   ```
+
+   Admin runs **`gh`** and **`wrangler whoami`** as this OS user — not via the browser session. DNS can use **`COGS_CF_API_TOKEN`** instead of Wrangler login.
+
 2. From the repo root:
 
 ```bash
@@ -32,7 +41,7 @@ cogs up    # or cogs up --foreground in Docker
 ## Architecture
 
 - **Browser** → Cloudflare Tunnel → **admin HTTP** (SPA + session cookie).
-- **admin HTTP** → unix socket → **supervisor** (metrics, SQL, deploy ops, GitHub for root).
+- **admin HTTP** → install/repos/auth on the admin process; unix socket → **supervisor** (metrics, SQL, redeploy/rollback).
 - Other apps **cannot** call the supervisor socket (peer executable check + session RBAC).
 
 ## Deploy operations (dashboard)
@@ -47,13 +56,41 @@ Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared e
 
 ## GitHub and Add app (root only)
 
-Host-level CLI auth only — no OAuth app in the dashboard.
+Host-level CLI auth only — **no** dashboard “Sign in with GitHub” and **no** `COGS_GITHUB_CLIENT_ID` on the admin server.
 
-1. On the CoGS server: `gh auth login && gh auth setup-git` and `wrangler login` (or run `scripts/bootstrap-host.sh`).
-2. Dashboard **Add app** reads **`GET /api/auth/status`** (GitHub + Cloudflare) and **`GET /api/repos`** (via `gh repo list`).
-3. **Install** clones or uses the workspace checkout, registers `cogs.app.toml`, updates `cogs.workspace.json`, runs `cogs launch -y --no-serve` in the background.
+### Host prerequisites
 
-CLI equivalent: `gh auth login`, then `cogs launch` on an app directory per [deploy.md](deploy.md).
+| Tool | Used for |
+|------|-----------|
+| **`gh`** | Repo list, clone, CoGS config hints (`has_cogs_config` on `/api/repos`) |
+| **`wrangler`** | Shown on status strip; **pull** mode needs it during background launch (Workers Builds setup) |
+
+Run both as the user that starts **admin** and **`cogs up`**. Private repos: the logged-in GitHub account must have access (collaborator / org member; authorize org SSO if required).
+
+### Admin HTTP API (root session)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/auth/status` | `{ github, cloudflare }` from host CLIs |
+| GET | `/api/repos` | Cached `gh repo list` (+ optional `?q=` filter) |
+| POST | `/api/apps` | Install app from repo (see body below) |
+
+**`POST /api/apps`** JSON:
+
+- **`repo`** (required): `owner/name`
+- **`name`** (optional): workspace app id; defaults to `name` in `cogs.app.toml`
+- **`deploy_mode`**: `push` or `pull` (updates config when registering)
+- **`page_subdomain`**: used only when scaffolding an empty app (`scaffold_only` — normal install reads the repo’s config)
+- **`scaffold_only`**: if true, create empty `apps/<name>/` template instead of cloning (advanced)
+
+**Install flow (default):**
+
+1. If the workspace git **origin** is the selected repo, use the existing checkout; otherwise **`gh repo clone`** into `.cogs/clones/<owner-repo>/`.
+2. Find **`cogs.app.toml`** (repo root or `apps/*/cogs.app.toml`).
+3. Register path in **`cogs.workspace.json`**, **`go work use`** when the app has `go.mod`.
+4. Background **`cogs launch <appdir> -y --no-serve`** on the server.
+
+CLI equivalent: `gh auth login`, add app manually per [deploy.md](deploy.md), then **`cogs launch <app> -y`**.
 
 ## RBAC
 
