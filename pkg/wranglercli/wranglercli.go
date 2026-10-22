@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
@@ -80,9 +79,4 @@ func Status(ctx context.Context) (AuthStatus, error) {
 		st.Account = w.Accounts[0].Name
 	}
 	return st, nil
-}
-
-func DefaultCtx() context.Context {
-	c, _ := context.WithTimeout(context.Background(), 45*time.Second)
-	return c
 }

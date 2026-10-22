@@ -65,7 +65,11 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 	} else {
 		for _, r := range repos {
 			if r.FullName == repoFull {
-				repoID = r.ID
+				id, err := ghcli.RepoDatabaseID(ctx, repoFull)
+				if err != nil {
+					return err
+				}
+				repoID = id
 				parts := strings.SplitN(r.FullName, "/", 2)
 				if len(parts) == 2 {
 					owner = parts[0]

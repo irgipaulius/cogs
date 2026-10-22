@@ -246,3 +246,17 @@ func ParseDeviceCodeFromLog(text string) (code, verifyURL string) {
 	}
 	return code, verifyURL
 }
+
+// RepoDatabaseID returns the numeric GitHub repository id (gh repo list's
+// "id" is a GraphQL node id; Cloudflare Workers Builds needs the number).
+func RepoDatabaseID(ctx context.Context, fullName string) (int64, error) {
+	raw, err := run(ctx, "api", "repos/"+fullName, "--jq", ".id")
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	if _, err := fmt.Sscan(strings.TrimSpace(raw), &id); err != nil || id == 0 {
+		return 0, fmt.Errorf("repo id for %s: unexpected %q", fullName, strings.TrimSpace(raw))
+	}
+	return id, nil
+}
