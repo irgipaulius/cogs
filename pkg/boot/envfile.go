@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -48,10 +49,15 @@ func WriteUpEnv(wsRoot string, keys map[string]string) error {
 			existing[k] = v
 		}
 	}
+	sorted := make([]string, 0, len(existing))
+	for k := range existing {
+		sorted = append(sorted, k)
+	}
+	slices.Sort(sorted)
 	var lines []string
 	lines = append(lines, "# Written by CoGS — sourced by cogs up and boot scripts (supervisor keys only)")
-	for k, v := range existing {
-		lines = append(lines, fmt.Sprintf("%s=%s", k, v))
+	for _, k := range sorted {
+		lines = append(lines, fmt.Sprintf("%s=%s", k, existing[k]))
 	}
 	body := strings.Join(lines, "\n") + "\n"
 	return os.WriteFile(path, []byte(body), 0o600)

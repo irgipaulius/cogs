@@ -63,9 +63,6 @@ func setupPullModeBuilds(projectDir string, app appcfg.App, pageHost, apiHost st
 	if pageHost == "" || apiHost == "" {
 		return fmt.Errorf("pull mode needs page and api hostnames (zone/subdomains in cogs.app.toml)")
 	}
-	if err := writePullWorkerWrangler(projectDir, worker, pageHost); err != nil {
-		return err
-	}
 	if err := deployPullWorkerUI(projectDir, pageHost, apiHost); err != nil {
 		return fmt.Errorf("initial Worker deploy: %w", err)
 	}

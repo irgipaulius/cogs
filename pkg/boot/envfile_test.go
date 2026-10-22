@@ -28,6 +28,26 @@ func TestWriteUpEnvFiltersKeys(t *testing.T) {
 	}
 }
 
+func TestWriteUpEnvStableKeyOrder(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteUpEnv(dir, map[string]string{
+		"COGS_CF_QUEUE_ID":     "z",
+		"COGS_DEPLOY_QUEUE_ID": "a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(UpEnvPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	idxCF := strings.Index(body, "COGS_CF_QUEUE_ID")
+	idxDeploy := strings.Index(body, "COGS_DEPLOY_QUEUE_ID")
+	if idxCF < 0 || idxDeploy < 0 || idxCF > idxDeploy {
+		t.Fatalf("expected sorted keys (CF before DEPLOY): %s", body)
+	}
+}
+
 func TestLoadUpEnvIntoProcessWhitelist(t *testing.T) {
 	dir := t.TempDir()
 	path := UpEnvPath(dir)

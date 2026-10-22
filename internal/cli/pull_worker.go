@@ -4,30 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
-
-func writePullWorkerWrangler(projectDir, workerName, pageHost string) error {
-	if pageHost == "" {
-		return fmt.Errorf("page hostname required for pull Worker custom domain")
-	}
-	routeBlock := fmt.Sprintf(`
-[[routes]]
-pattern = %q
-custom_domain = true
-`, pageHost)
-	toml := fmt.Sprintf(`name = %q
-compatibility_date = "2024-06-01"
-workers_dev = false
-%s
-[assets]
-directory = "./public"
-exclude = ["**/*.bak", "**/.DS_Store", "**/config.js.example", "**/.assetsignore"]
-`, workerName, routeBlock)
-	path := filepath.Join(projectDir, "wrangler.toml")
-	return os.WriteFile(path, []byte(toml), 0o644)
-}
 
 func deployPullWorkerUI(projectDir, pageHost, apiHost string) error {
 	pageHost = strings.TrimSpace(pageHost)

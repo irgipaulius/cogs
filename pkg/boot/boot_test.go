@@ -64,4 +64,7 @@ func TestWriteRCRunsAsCogsUser(t *testing.T) {
 	if !strings.Contains(body, "cogs_up_status") || !strings.Contains(body, "kill -0") {
 		t.Fatalf("rc script must implement status via pidfile: %s", body)
 	}
+	if !strings.Contains(body, "restart) cogs_up_stop; cogs_up_start") {
+		t.Fatalf("rc script must restart via stop then start: %s", body)
+	}
 }

@@ -102,6 +102,7 @@ load_rc_config $name
 case "$1" in
 start) cogs_up_start ;;
 stop) cogs_up_stop ;;
+restart) cogs_up_stop; cogs_up_start ;;
 status) cogs_up_status ;;
 *) run_rc_command "$1" ;;
 esac

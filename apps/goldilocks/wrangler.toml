@@ -2,11 +2,9 @@ name = "cogs-goldilocks"
 compatibility_date = "2024-06-01"
 workers_dev = false
 
-# Custom domain is written by `cogs launch` (pull mode) for your zone, e.g.:
-# [[routes]]
-# pattern = "goldilocks.hyperreader.eu"
-# custom_domain = true
+[[routes]]
+pattern = "goldilocks.hyperreader.eu"
+custom_domain = true
 
 [assets]
 directory = "./public"
-exclude = ["**/*.bak", "**/.DS_Store", "**/config.js.example", "**/.assetsignore"]

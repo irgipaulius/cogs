@@ -44,7 +44,6 @@ workers_dev = false
 %s
 [assets]
 directory = %q
-exclude = ["**/*.bak", "**/.DS_Store", "**/config.js.example", "**/.assetsignore"]
 `, worker, routeBlock, assetsDir)
 	tomlPath := filepath.Join(genDir, "wrangler.toml")
 	if err := os.WriteFile(tomlPath, []byte(toml), 0o644); err != nil {

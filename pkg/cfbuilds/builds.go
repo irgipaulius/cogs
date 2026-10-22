@@ -89,22 +89,22 @@ func (c *Client) WorkerScriptTag(workerName string) (string, error) {
 		return workerName, err
 	}
 	var scripts []struct {
-		ID string `json:"id"`
+		ID  string `json:"id"`
+		Tag string `json:"tag"`
 	}
 	if err := json.Unmarshal(b, &scripts); err != nil {
-		return workerName, nil
+		return "", err
 	}
 	for _, s := range scripts {
-		if s.ID == workerName || strings.EqualFold(s.ID, workerName) {
-			return s.ID, nil
+		if s.ID != workerName && !strings.EqualFold(s.ID, workerName) {
+			continue
 		}
+		if strings.TrimSpace(s.Tag) == "" {
+			return "", fmt.Errorf("worker %q listed but tag missing in scripts API", workerName)
+		}
+		return s.Tag, nil
 	}
-	// Builds API accepts the worker name once the script exists; triggers GET validates the tag.
-	triggersPath := fmt.Sprintf("/accounts/%s/builds/workers/%s/triggers", c.AccountID, url.PathEscape(workerName))
-	if _, err := c.do(http.MethodGet, triggersPath, nil); err == nil {
-		return workerName, nil
-	}
-	return workerName, nil
+	return "", fmt.Errorf("worker script %q not found — deploy the Worker once", workerName)
 }
 
 // Trigger configures build on branch for a worker script tag.
