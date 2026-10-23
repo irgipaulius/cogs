@@ -252,8 +252,10 @@ else
       fi
       logf=""
       [[ -n "$path" ]] && logf="$ROOT/${path}/.cogs/run/app.log"
-      if [[ -f "$logf" ]] && grep -q "panic:" "$logf" 2>/dev/null; then
-        fail "Test 13 — app ${app} panic in app.log"
+      markf=""
+      [[ -n "$path" ]] && markf="$ROOT/${path}/.cogs/run/app.log.start"
+      if [[ -f "$logf" ]] && acceptance_app_log_panic_since_start "$logf" "$markf"; then
+        fail "Test 13 — app ${app} panic in app.log since start"
         continue
       fi
       if [[ -f "$pidf" ]]; then
