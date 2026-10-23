@@ -15,8 +15,10 @@ export default defineConfig({
   root,
   publicDir: path.join(root, "static"),
   build: {
-    outDir: path.resolve(root, "../public"),
-    emptyOutDir: false,
+    outDir: process.env.COGS_VITE_OUT_DIR
+      ? path.resolve(process.env.COGS_VITE_OUT_DIR)
+      : path.resolve(root, "../public"),
+    emptyOutDir: !!process.env.COGS_VITE_OUT_DIR,
   },
   server: {
     port: 5173,

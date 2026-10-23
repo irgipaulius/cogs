@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
+	"github.com/irgipaulius/cogs/pkg/appbuild"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/buildenv"
 	"github.com/irgipaulius/cogs/pkg/launch"
@@ -169,8 +170,7 @@ func runLaunch(flags launchFlags) error {
 	}
 
 	if !flags.skipPages && !m.IsCombined() {
-		cfgJS := filepath.Join(abs, m.PagesDir, "config.js")
-		if err := writePageConfig(cfgJS, pageHost, apiHost, m); err != nil {
+		if err := appbuild.WritePageConfig(abs, pageHost, apiHost, m); err != nil {
 			return err
 		}
 		appCfg, _ := appcfg.Load(abs)

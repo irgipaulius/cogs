@@ -36,8 +36,8 @@ func (r *Runtime) RegisterAdminRoutes(mux *http.ServeMux, dbPath string, db *sql
 			http.NotFound(w, req)
 		}
 	}))
-	mux.Handle("/admin", h)
-	mux.Handle("/admin/", h)
+	// Go 1.22+ method patterns — must not mix legacy "/admin" with "GET /" on the same mux.
+	mux.Handle("GET /admin/{path...}", h)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

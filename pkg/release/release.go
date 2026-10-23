@@ -55,6 +55,18 @@ func ReadCurrent(wsRoot, appID string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
+// ReadCurrentSHA is ReadCurrent without error (for GC keep sets).
+func ReadCurrentSHA(wsRoot, appID string) string {
+	s, _ := ReadCurrent(wsRoot, appID)
+	return strings.TrimSpace(s)
+}
+
+// ReadPreviousSHA is ReadPrevious without error (for GC keep sets).
+func ReadPreviousSHA(wsRoot, appID string) string {
+	s, _ := ReadPrevious(wsRoot, appID)
+	return strings.TrimSpace(s)
+}
+
 // ReadPrevious returns the previous commit hash, if any.
 func ReadPrevious(wsRoot, appID string) (string, error) {
 	b, err := os.ReadFile(filepath.Join(AppRoot(wsRoot, appID), previousFile))

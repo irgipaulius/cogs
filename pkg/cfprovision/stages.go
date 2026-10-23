@@ -10,6 +10,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/cfclient"
 	"github.com/irgipaulius/cogs/pkg/cftunnel"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/release"
 	"github.com/irgipaulius/cogs/pkg/state"
 )
 
@@ -93,7 +94,9 @@ func EnsureWorker(ctx context.Context, cfg Config, st *state.Store, app state.Ap
 	if pageHost == "" {
 		return nil
 	}
-	worker, err := DeployWorker(st.WSRoot(), appDir, pageHost, m)
+	releaseCommit, _ := release.ReadCurrent(st.WSRoot(), app.ID)
+	_, apiHost := Hosts(app, m)
+	worker, err := DeployWorker(st.WSRoot(), appDir, pageHost, apiHost, releaseCommit, m)
 	if err != nil {
 		return err
 	}

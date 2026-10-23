@@ -105,6 +105,18 @@ func releaseCombined(st *state.Store, appID string) bool {
 
 func expandKeepSet(wsRoot, appID string, combined bool, shas []string) map[string]bool {
 	keep := map[string]bool{}
+	for _, sha := range []string{release.ReadCurrentSHA(wsRoot, appID), release.ReadPreviousSHA(wsRoot, appID)} {
+		sha = strings.TrimSpace(sha)
+		if sha == "" {
+			continue
+		}
+		if full := release.ResolveCommit(wsRoot, appID, sha); full != "" {
+			keep[full] = true
+			keep[sha] = true
+		} else {
+			keep[sha] = true
+		}
+	}
 	for _, sha := range shas {
 		sha = strings.TrimSpace(sha)
 		if sha == "" {

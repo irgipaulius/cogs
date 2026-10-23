@@ -81,8 +81,12 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 	var tunnelID string
 	cfCfg := cfprovision.NewConfig(wsRoot, log)
 	buildCommit := strings.TrimSpace(opts.Commit)
-	if buildCommit == "" && opts.ForceRebuild {
-		buildCommit = gitHEAD(wsRoot)
+	if buildCommit == "" {
+		if cur, _ := release.ReadCurrent(wsRoot, app.ID); cur != "" {
+			buildCommit = cur
+		} else if opts.ForceRebuild {
+			buildCommit = gitHEAD(wsRoot)
+		}
 	}
 
 	if err := stage(st, app.ID, runID, "source", log, func() error {
@@ -153,10 +157,12 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 
 	buildErr := stage(st, app.ID, runID, "build_release", log, func() error {
 		detail, err := deploy.DeployBackend(ctx, wsRoot, deploy.Options{
-			AppID:  app.ID,
-			Commit: buildCommit,
-			Mode:   app.DeployMode,
-			Action: "reconcile",
+			AppID:           app.ID,
+			Commit:          buildCommit,
+			Mode:            app.DeployMode,
+			Action:          "reconcile",
+			SkipIfUnchanged: true,
+			ForceRebuild:    opts.ForceRebuild,
 		})
 		if err != nil {
 			return err
@@ -176,11 +182,20 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		_ = st.SetConverged(app.ID, false, msg)
 	}
 
-	if err := stage(st, app.ID, runID, "migrate", log, func() error {
+	var cfErrs []string
+	if err := softStage(st, app.ID, runID, "migrate", log, func() error {
+		cfg, err := appcfg.Load(appDir)
+		if err != nil {
+			return err
+		}
 		m, _ := launch.Load(appDir)
 		bin, ok := release.CurrentBinary(wsRoot, app.ID, m.IsCombined())
 		if !ok {
 			return fmt.Errorf("migrate: no release binary")
+		}
+		if !deploy.SupportsMigrate(appDir, bin, cfg) {
+			fmt.Fprintln(log, "migrate: skipped (binary has no migrate command)")
+			return nil
 		}
 		cmd := exec.CommandContext(ctx, bin, "migrate", "-env", ".env")
 		cmd.Dir = appDir
@@ -191,12 +206,11 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		}
 		return nil
 	}); err != nil {
-		return err
+		cfErrs = append(cfErrs, err.Error())
 	}
 
 	_ = stage(st, app.ID, runID, "activate", log, func() error { return nil })
 
-	var cfErrs []string
 	if err := softStage(st, app.ID, runID, "cf_resources", log, func() error {
 		return cfprovision.EnsureD1R2(ctx, cfCfg, st, app, appDir)
 	}); err != nil {

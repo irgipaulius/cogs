@@ -32,6 +32,9 @@ type Options struct {
 	Action  string // redeploy, rollback, pull_build, launch
 	By      string
 	Restart func(appDir, binPath string) error // optional; default spawns via release binary
+	// SkipIfUnchanged skips build/restart when commit matches current release binary.
+	SkipIfUnchanged bool
+	ForceRebuild    bool
 }
 
 // DeployBackend builds at commit, health-checks, activates release pointer, restarts app.
@@ -80,6 +83,19 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 		By: opts.By,
 	}
 	_ = cockpit.RecordDeploy(wsRoot, ev)
+
+	combined := cfg.Kind == "combined"
+	if opts.SkipIfUnchanged && !opts.ForceRebuild {
+		cur, _ := release.ReadCurrent(wsRoot, appID)
+		if cur != "" && shasEqual(cur, commit) {
+			if _, _, ok := release.BinaryForCommit(wsRoot, appID, commit, combined); ok {
+				ev.Status = "succeeded"
+				ev.Detail = "unchanged " + shortSHA(commit)
+				_ = cockpit.RecordDeploy(wsRoot, ev)
+				return ev.Detail, nil
+			}
+		}
+	}
 
 	wtRoot, err := ensureWorktree(ctx, wsRoot, gitRoot, appID, commit, token)
 	if err != nil {
@@ -328,6 +344,17 @@ func shortSHA(s string) string {
 		return s[:7]
 	}
 	return s
+}
+
+func shasEqual(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	return strings.EqualFold(a, b) ||
+		strings.HasPrefix(strings.ToLower(a), strings.ToLower(b)) ||
+		strings.HasPrefix(strings.ToLower(b), strings.ToLower(a))
 }
 
 // RecordBuildFailure logs a failed Workers build without touching the backend.

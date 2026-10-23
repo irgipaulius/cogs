@@ -3,10 +3,12 @@ package reconcile
 import (
 	"context"
 	"log"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/irgipaulius/cogs/pkg/state"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
 
 const (
@@ -60,9 +62,12 @@ func (m *Manager) Enqueue(appID string, opts Options) {
 		if err := Run(ctx, m.DB, appID, opts); err != nil {
 			log.Printf("reconcile %s: %v", appID, err)
 			m.scheduleRetry(appID)
-			return
+		} else {
+			m.clearRetry(appID)
 		}
-		m.clearRetry(appID)
+		if m.WSRoot != "" {
+			wranglerexec.RotateWorkspaceLog(filepath.Join(m.WSRoot, ".cogs", "run", "wrangler.log"))
+		}
 	}()
 }
 

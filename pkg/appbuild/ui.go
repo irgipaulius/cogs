@@ -32,7 +32,9 @@ func Build(projectDir string, extraEnv []string, quick bool) error {
 			return fmt.Errorf("npm install: %w", err)
 		}
 	}
-	if err := npm(buildDir, extraEnv, "run", "build"); err != nil {
+	staging := PagesDistDir(projectDir)
+	env := append(extraEnv, "COGS_VITE_OUT_DIR="+staging)
+	if err := npm(buildDir, env, "run", "build"); err != nil {
 		return fmt.Errorf("npm run build: %w", err)
 	}
 	return nil

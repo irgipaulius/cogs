@@ -172,36 +172,52 @@ else
   skip "Test 12 — up.log missing"
 fi
 
-# Test 13 — each workspace app has a running process
+# Test 13 — each workspace app has a running process (no python3 in jail)
+workspace_app_names() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "FAIL: Test 13 — jq required (install jq in the jail)" >&2
+    return 1
+  fi
+  jq -r '.apps[]?.name // empty' "$ROOT/cogs.workspace.json"
+}
+
+workspace_app_path() {
+  local app=$1
+  jq -r --arg n "$app" '.apps[] | select(.name==$n) | .path // empty' "$ROOT/cogs.workspace.json"
+}
+
 if [[ -f "$ROOT/cogs.workspace.json" ]]; then
-  while IFS= read -r app; do
-    [[ -z "$app" ]] && continue
-    pidf="$ROOT/apps/${app}/.cogs/run/app.pid"
-    if [[ ! -f "$pidf" ]]; then
-      pidf=$(find "$ROOT/apps" -path "*/${app}/.cogs/run/app.pid" 2>/dev/null | head -1)
-    fi
-    if [[ -f "$pidf" ]]; then
-      pid=$(tr -d ' \n' < "$pidf")
-      if kill -0 "$pid" 2>/dev/null; then
-        pass "Test 13 — app ${app} running pid $pid"
-      else
-        fail "Test 13 — app ${app} stale pid $pid"
-      fi
-    else
-      # resolve path from workspace json
-      path=$(python3 -c "import json;ws=json.load(open('$ROOT/cogs.workspace.json'));print(next((a['path'] for a in ws.get('apps',[]) if a.get('name')=='$app'),''))" 2>/dev/null || true)
+  if ! command -v jq >/dev/null 2>&1; then
+    fail "Test 13 — jq not installed (required)"
+  else
+    while IFS= read -r app; do
+      [[ -z "$app" ]] && continue
+      path=$(workspace_app_path "$app")
+      pidf=""
       if [[ -n "$path" ]]; then
         pidf="$ROOT/${path}/.cogs/run/app.pid"
-        if [[ -f "$pidf" ]] && kill -0 "$(tr -d ' \n' < "$pidf")" 2>/dev/null; then
-          pass "Test 13 — app ${app} running"
+      fi
+      if [[ ! -f "$pidf" ]]; then
+        pidf=$(find "$ROOT/apps" -path "*/${app}/.cogs/run/app.pid" 2>/dev/null | head -1)
+      fi
+      logf=""
+      [[ -n "$path" ]] && logf="$ROOT/${path}/.cogs/run/app.log"
+      if [[ -f "$logf" ]] && grep -q "panic:" "$logf" 2>/dev/null; then
+        fail "Test 13 — app ${app} panic in app.log"
+        continue
+      fi
+      if [[ -f "$pidf" ]]; then
+        pid=$(tr -d ' \n' < "$pidf")
+        if kill -0 "$pid" 2>/dev/null; then
+          pass "Test 13 — app ${app} running pid $pid"
         else
-          fail "Test 13 — app ${app} not running (no live app.pid)"
+          fail "Test 13 — app ${app} stale pid $pid"
         fi
       else
-        fail "Test 13 — app ${app} path unknown"
+        fail "Test 13 — app ${app} not running (no live app.pid)"
       fi
-    fi
-  done < <(python3 -c "import json;ws=json.load(open('$ROOT/cogs.workspace.json'));print('\n'.join(a['name'] for a in ws.get('apps',[])))" 2>/dev/null || true)
+    done < <(workspace_app_names)
+  fi
 fi
 
 # Test 14 — tunnel hostnames respond (admin + todo-api if configured)

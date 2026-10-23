@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/appbuild"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/gitrepo"
 	"github.com/irgipaulius/cogs/pkg/launch"
@@ -132,8 +133,13 @@ func doctorOne(dir string, a workspace.App, goWork string) []doctorFinding {
 				})
 			}
 		}
-		cfgPath := filepath.Join(dir, m.PagesDir, "config.js")
-		if b, err := os.ReadFile(cfgPath); err == nil && !m.IsCombined() {
+		cfgPath := filepath.Join(appbuild.PagesDistDir(dir), "config.js")
+		b, err := os.ReadFile(cfgPath)
+		if err != nil {
+			cfgPath = filepath.Join(dir, m.PagesDir, "config.js")
+			b, err = os.ReadFile(cfgPath)
+		}
+		if err == nil && !m.IsCombined() {
 			if !configDeclares(string(b), wantPage, wantAPI) {
 				out = append(out, doctorFinding{
 					App: app, OK: false,

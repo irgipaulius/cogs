@@ -159,7 +159,10 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 				if !quiet && upGate.shouldLog(a.Name, err.Error()) {
 					ux.Warn(a.Name + ": " + err.Error())
 				}
+			} else if pid, ok := appRunning(dir); ok {
+				noteAppStart(dir, pid)
 			}
+			recordAppCrashIfAny(st, a.Name, dir)
 			if noTunnel {
 				continue
 			}
