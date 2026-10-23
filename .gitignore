@@ -8,6 +8,14 @@
 .env.docker
 .DS_Store
 node_modules/
+.cache/
+.config/
+.npm/
+go/
+*.bak
+*.bak.*
+apps/*/bin/
+apps/*/data/
 cogs-app.rc
 cogs-app.service
 com.cogs.app.plist

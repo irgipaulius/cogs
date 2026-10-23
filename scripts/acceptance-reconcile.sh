@@ -12,7 +12,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 
-admin_url() {
+admin_local_url() {
   if [[ -n "${COGS_ADMIN_URL:-}" ]]; then
     echo "$COGS_ADMIN_URL"
     return
@@ -33,8 +33,26 @@ admin_url() {
   echo "http://127.0.0.1:18786"
 }
 
-ADMIN="$(admin_url)"
-echo "CoGS acceptance-reconcile (ROOT=$ROOT ADMIN=$ADMIN)"
+admin_public_url() {
+  if [[ -n "${COGS_ADMIN_PUBLIC_URL:-}" ]]; then
+    echo "$COGS_ADMIN_PUBLIC_URL"
+    return
+  fi
+  local envf="$ROOT/apps/admin/.env"
+  if [[ -f "$envf" ]]; then
+    local origin
+    origin=$(grep -E '^COGS_PUBLIC_PAGE_ORIGIN=' "$envf" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+    if [[ -n "$origin" ]]; then
+      echo "${origin%/}"
+      return
+    fi
+  fi
+  echo ""
+}
+
+ADMIN="$(admin_local_url)"
+PUBLIC_ADMIN="$(admin_public_url)"
+echo "CoGS acceptance-reconcile (ROOT=$ROOT ADMIN=$ADMIN PUBLIC=${PUBLIC_ADMIN:-none})"
 echo "===================================================="
 
 curl_api() {
@@ -82,11 +100,16 @@ else
   fail "Test 2 — missing .cogs/state.db"
 fi
 
-# Test 3 — admin health
-if curl -sf "$ADMIN/health" >/dev/null 2>&1; then
-  pass "Test 3 — admin /health reachable"
+# Test 3 — public admin health (tunnel), not loopback-only
+if [[ -n "$PUBLIC_ADMIN" ]]; then
+  code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "${PUBLIC_ADMIN}/health" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    pass "Test 3 — public admin /health HTTP 200 at $PUBLIC_ADMIN"
+  else
+    fail "Test 3 — public admin /health HTTP $code at $PUBLIC_ADMIN (tunnel/DNS?)"
+  fi
 else
-  fail "Test 3 — admin /health unreachable at $ADMIN"
+  fail "Test 3 — set COGS_ADMIN_PUBLIC_URL or COGS_PUBLIC_PAGE_ORIGIN in apps/admin/.env"
 fi
 
 skip "Test 4 — goldilocks breaking push / last_good (manual)"
@@ -117,13 +140,13 @@ else
   skip "Test 9 — not a git checkout"
 fi
 
-# Test 10 — queue pull 401
+# Test 10 — queue pull errors
 UPLOG="$ROOT/.cogs/run/up.log"
 if [[ -f "$UPLOG" ]]; then
-  if grep -E 'queue pull.*401|queue pull token.*401' "$UPLOG" >/dev/null 2>&1; then
-    fail "Test 10 — 401 in up.log queue pull"
+  if grep -E 'queue pull|queue ack|queue pull token|queue pull account' "$UPLOG" | grep -qiE 'error|401|403|fail|missing' >/dev/null 2>&1; then
+    fail "Test 10 — queue pull errors in up.log"
   else
-    pass "Test 10 — no queue-pull 401 in up.log"
+    pass "Test 10 — no queue-pull errors in up.log"
   fi
 else
   skip "Test 10 — up.log missing"
@@ -141,6 +164,57 @@ if [[ -f "$UPLOG" ]]; then
   fi
 else
   skip "Test 12 — up.log missing"
+fi
+
+# Test 13 — each workspace app has a running process
+if [[ -f "$ROOT/cogs.workspace.json" ]]; then
+  while IFS= read -r app; do
+    [[ -z "$app" ]] && continue
+    pidf="$ROOT/apps/${app}/.cogs/run/app.pid"
+    if [[ ! -f "$pidf" ]]; then
+      pidf=$(find "$ROOT/apps" -path "*/${app}/.cogs/run/app.pid" 2>/dev/null | head -1)
+    fi
+    if [[ -f "$pidf" ]]; then
+      pid=$(tr -d ' \n' < "$pidf")
+      if kill -0 "$pid" 2>/dev/null; then
+        pass "Test 13 — app ${app} running pid $pid"
+      else
+        fail "Test 13 — app ${app} stale pid $pid"
+      fi
+    else
+      # resolve path from workspace json
+      path=$(python3 -c "import json;ws=json.load(open('$ROOT/cogs.workspace.json'));print(next((a['path'] for a in ws.get('apps',[]) if a.get('name')=='$app'),''))" 2>/dev/null || true)
+      if [[ -n "$path" ]]; then
+        pidf="$ROOT/${path}/.cogs/run/app.pid"
+        if [[ -f "$pidf" ]] && kill -0 "$(tr -d ' \n' < "$pidf")" 2>/dev/null; then
+          pass "Test 13 — app ${app} running"
+        else
+          fail "Test 13 — app ${app} not running (no live app.pid)"
+        fi
+      else
+        fail "Test 13 — app ${app} path unknown"
+      fi
+    fi
+  done < <(python3 -c "import json;ws=json.load(open('$ROOT/cogs.workspace.json'));print('\n'.join(a['name'] for a in ws.get('apps',[])))" 2>/dev/null || true)
+fi
+
+# Test 14 — tunnel hostnames respond (admin + todo-api if configured)
+check_tunnel_host() {
+  local label=$1 url=$2
+  [[ -z "$url" ]] && return 0
+  code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "${url%/}/health" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    pass "Test 14 — tunnel $label HTTP 200"
+  else
+    fail "Test 14 — tunnel $label HTTP $code at $url"
+  fi
+}
+if [[ -n "$PUBLIC_ADMIN" ]]; then
+  check_tunnel_host "admin" "$PUBLIC_ADMIN"
+fi
+todo_api=$(grep -E '^COGS_PUBLIC_API_URL=' "$ROOT/apps/todo/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+if [[ -n "$todo_api" ]]; then
+  check_tunnel_host "todo-api" "$todo_api"
 fi
 
 echo "===================================================="

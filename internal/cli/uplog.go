@@ -19,7 +19,14 @@ func attachUpLog(root string) {
 		return
 	}
 	upLogWriter = f
-	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	log.SetOutput(upLogWriterFor(f))
+}
+
+func upLogWriterFor(f *os.File) io.Writer {
+	if st, err := os.Stderr.Stat(); err == nil && (st.Mode()&os.ModeCharDevice) != 0 {
+		return io.MultiWriter(os.Stderr, f)
+	}
+	return f
 }
 
 func rotateUpLogInProcess(root string) {
@@ -51,7 +58,7 @@ func rotateUpLogInProcess(root string) {
 		return
 	}
 	upLogWriter = f
-	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	log.SetOutput(upLogWriterFor(f))
 }
 
 func itoa(n int) string {

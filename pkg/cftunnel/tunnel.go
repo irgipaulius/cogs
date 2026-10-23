@@ -50,7 +50,7 @@ func RunToken(ctx context.Context, c *cfclient.Client, accountID, tunnelID strin
 	apiURL := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/cfd_tunnel/%s/token", accountID, tunnelID)
 	out, err := c.Do(ctx, cftoken.ScopeAPI, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return "", err
+		return "", tunnelTokenErr(err)
 	}
 	var raw string
 	if err := json.Unmarshal(out.Result, &raw); err == nil && raw != "" {
@@ -68,13 +68,28 @@ func RunToken(ctx context.Context, c *cfclient.Client, accountID, tunnelID strin
 	return obj.Token, nil
 }
 
-// StartCloudflared runs cloudflared with an API-issued tunnel token (FreeBSD-safe).
+func tunnelTokenErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "forbidden") || strings.Contains(msg, "10003") {
+		return fmt.Errorf("Cloudflare API token lacks cfd_tunnel token permission — grant Account → Cloudflare Tunnel → Read (or Edit): %s", msg)
+	}
+	if strings.Contains(strings.ToLower(msg), "auth") {
+		return fmt.Errorf("Cloudflare API token cannot read tunnel token — check token scopes: %s", msg)
+	}
+	return err
+}
+
+// StartCloudflared runs cloudflared with TUNNEL_TOKEN (not visible in argv).
 func StartCloudflared(token, logPath string) (*exec.Cmd, error) {
 	bin, err := exec.LookPath("cloudflared")
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(bin, "tunnel", "run", "--token", token)
+	cmd := exec.Command(bin, "tunnel", "run")
+	cmd.Env = append(os.Environ(), "TUNNEL_TOKEN="+token)
 	if logPath != "" {
 		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -83,11 +98,29 @@ func StartCloudflared(token, logPath string) (*exec.Cmd, error) {
 		cmd.Stdout = f
 		cmd.Stderr = f
 	}
-	cmd.Env = os.Environ()
 	return cmd, nil
 }
 
-// WriteTokenFile stores token for debugging (0600).
+// StartCloudflaredWithFile runs cloudflared using --token-file (0600).
+func StartCloudflaredWithFile(tokenPath, logPath string) (*exec.Cmd, error) {
+	bin, err := exec.LookPath("cloudflared")
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(bin, "tunnel", "run", "--token-file", tokenPath)
+	cmd.Env = os.Environ()
+	if logPath != "" {
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, err
+		}
+		cmd.Stdout = f
+		cmd.Stderr = f
+	}
+	return cmd, nil
+}
+
+// WriteTokenFile stores token for cloudflared (0600).
 func WriteTokenFile(dir, name, token string) (string, error) {
 	_ = os.MkdirAll(dir, 0o750)
 	safe := strings.NewReplacer("/", "-", " ", "_").Replace(name)

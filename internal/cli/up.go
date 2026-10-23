@@ -134,6 +134,9 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	defer tick.Stop()
 	defer reconcileTick.Stop()
 
+	stopLegacyLeaseWatchers(root, ws)
+	enqueueMonorepoRebuildIfNeeded(root, st, rec, ws)
+
 	supervise := func(quiet bool) {
 		reapChildren()
 		rotateUpLogInProcess(root)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cfclient"
 	"github.com/irgipaulius/cogs/pkg/cfprovision"
 	"github.com/irgipaulius/cogs/pkg/release"
@@ -44,33 +45,94 @@ func gcApp(ctx context.Context, st *state.Store, appID string) error {
 
 func pruneReleases(st *state.Store, appID string) error {
 	wsRoot := st.WSRoot()
-	rels, err := st.ListReleaseRows(appID)
-	if err != nil {
-		return err
-	}
+	combined := releaseCombined(st, appID)
 	keepSHAs, err := st.KeepReleaseSHAs(appID, 3)
 	if err != nil {
 		return err
 	}
-	keep := map[string]bool{}
-	for _, sha := range keepSHAs {
-		keep[sha] = true
+	keep := expandKeepSet(wsRoot, appID, combined, keepSHAs)
+	rels, err := st.ListReleaseRows(appID)
+	if err != nil {
+		return err
 	}
 	for _, r := range rels {
-		if keep[r.CommitSHA] {
+		if keepReleaseSHA(keep, r.CommitSHA) {
 			continue
 		}
-		_ = os.RemoveAll(filepath.Join(release.AppRoot(wsRoot, appID), r.CommitSHA))
+		resolved := release.ResolveCommit(wsRoot, appID, r.CommitSHA)
+		if resolved != "" {
+			_ = os.RemoveAll(filepath.Join(release.AppRoot(wsRoot, appID), resolved))
+		}
 		_ = st.DeleteReleaseRow(appID, r.ID)
 	}
-	wtRoot := filepath.Join(wsRoot, ".cogs", "worktrees", appID)
-	entries, _ := os.ReadDir(wtRoot)
+	appRoot := release.AppRoot(wsRoot, appID)
+	entries, _ := os.ReadDir(appRoot)
 	for _, e := range entries {
-		if e.IsDir() && !keep[strings.TrimSpace(e.Name())] {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if name == "current" || name == "previous" {
+			continue
+		}
+		if !keepReleaseSHA(keep, name) {
+			_ = os.RemoveAll(filepath.Join(appRoot, name))
+		}
+	}
+	wtRoot := filepath.Join(wsRoot, ".cogs", "worktrees", appID)
+	wtEntries, _ := os.ReadDir(wtRoot)
+	for _, e := range wtEntries {
+		if e.IsDir() && !keepReleaseSHA(keep, strings.TrimSpace(e.Name())) {
 			_ = os.RemoveAll(filepath.Join(wtRoot, e.Name()))
 		}
 	}
 	buildRoot := filepath.Join(wsRoot, ".cogs", "build", appID)
 	_ = os.RemoveAll(buildRoot)
 	return nil
+}
+
+func releaseCombined(st *state.Store, appID string) bool {
+	app, err := st.GetApp(appID)
+	if err != nil || app.AppPath == "" {
+		return appID == "admin"
+	}
+	dir := filepath.Join(st.WSRoot(), filepath.FromSlash(app.AppPath))
+	if cfg, err := appcfg.Load(dir); err == nil {
+		return cfg.Kind == "combined"
+	}
+	return appID == "admin"
+}
+
+func expandKeepSet(wsRoot, appID string, combined bool, shas []string) map[string]bool {
+	keep := map[string]bool{}
+	for _, sha := range shas {
+		sha = strings.TrimSpace(sha)
+		if sha == "" {
+			continue
+		}
+		keep[sha] = true
+		if full := release.ResolveCommit(wsRoot, appID, sha); full != "" {
+			keep[full] = true
+		}
+	}
+	for _, disk := range release.ListDiskCommits(wsRoot, appID, combined) {
+		for sha := range keep {
+			if strings.HasPrefix(disk, sha) || strings.HasPrefix(sha, disk) {
+				keep[disk] = true
+			}
+		}
+	}
+	return keep
+}
+
+func keepReleaseSHA(keep map[string]bool, sha string) bool {
+	if keep[sha] {
+		return true
+	}
+	for k := range keep {
+		if strings.HasPrefix(sha, k) || strings.HasPrefix(k, sha) {
+			return true
+		}
+	}
+	return false
 }

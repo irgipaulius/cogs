@@ -83,11 +83,12 @@ func Activate(wsRoot, appID, commit string) error {
 // CurrentBinary returns the path to the live release binary when current is set.
 func CurrentBinary(wsRoot, appID string, combined bool) (string, bool) {
 	commit, err := ReadCurrent(wsRoot, appID)
-	if err != nil || commit == "" {
-		return "", false
+	if err == nil && commit != "" {
+		if _, p, ok := BinaryForCommit(wsRoot, appID, commit, combined); ok {
+			return p, true
+		}
 	}
-	p := BinaryPath(wsRoot, appID, commit, combined)
-	if st, err := os.Stat(p); err == nil && !st.IsDir() {
+	if _, p, ok := BestRelease(wsRoot, appID, combined); ok {
 		return p, true
 	}
 	return "", false

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/hostenv"
@@ -19,8 +21,58 @@ import (
 
 const accountIDFile = ".cogs/cloudflare/account_id"
 
+var accountCache struct {
+	mu      sync.Mutex
+	entries map[string]accountCacheEntry
+}
+
+type accountCacheEntry struct {
+	id        string
+	err       error
+	expiresAt time.Time
+}
+
+func init() {
+	accountCache.entries = map[string]accountCacheEntry{}
+}
+
 // AccountID returns the active Cloudflare account id.
 func (c *Client) AccountID(ctx context.Context) (string, error) {
+	key := c.WSRoot
+	if key == "" {
+		key = "_"
+	}
+	accountCache.mu.Lock()
+	if e, ok := accountCache.entries[key]; ok && time.Now().Before(e.expiresAt) {
+		id, err := e.id, e.err
+		accountCache.mu.Unlock()
+		if err != nil {
+			return "", err
+		}
+		return id, nil
+	}
+	accountCache.mu.Unlock()
+
+	id, err := c.resolveAccountID(ctx)
+	if err == nil && id != "" && c.WSRoot != "" {
+		_ = storeAccountID(c.WSRoot, id)
+	}
+
+	accountCache.mu.Lock()
+	ttl := 10 * time.Minute
+	if err != nil {
+		ttl = 2 * time.Minute
+	}
+	accountCache.entries[key] = accountCacheEntry{id: id, err: err, expiresAt: time.Now().Add(ttl)}
+	accountCache.mu.Unlock()
+
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (c *Client) resolveAccountID(ctx context.Context) (string, error) {
 	if id := strings.TrimSpace(os.Getenv("COGS_CF_ACCOUNT_ID")); id != "" {
 		return id, nil
 	}
@@ -29,14 +81,16 @@ func (c *Client) AccountID(ctx context.Context) (string, error) {
 			return id, nil
 		}
 		if id := accountIDFromAppEnvs(c.WSRoot); id != "" {
-			_ = storeAccountID(c.WSRoot, id)
+			return id, nil
+		}
+		if id := accountIDFromWorkspaceApps(c.WSRoot); id != "" {
+			return id, nil
+		}
+		if id := accountIDFromStoredTunnelToken(c.WSRoot); id != "" {
 			return id, nil
 		}
 	}
 	if id, err := accountIDFromWranglerConfig(); err == nil && id != "" {
-		if c.WSRoot != "" {
-			_ = storeAccountID(c.WSRoot, id)
-		}
 		return id, nil
 	}
 	tok, err := c.Token(ctx, cftoken.ScopeAPI)
@@ -44,22 +98,21 @@ func (c *Client) AccountID(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("cloudflare account: %w", err)
 	}
 	if id, err := accountIDFromToken(ctx, tok); err == nil && id != "" {
-		if c.WSRoot != "" {
-			_ = storeAccountID(c.WSRoot, id)
-		}
+		return id, nil
+	}
+	if id, err := accountIDFromZones(ctx, tok); err == nil && id != "" {
+		return id, nil
+	}
+	if id := accountIDFromTunnelToken(tok); id != "" {
 		return id, nil
 	}
 	if c.WSRoot != "" {
 		_ = os.Setenv("COGS_WORKSPACE_ROOT", c.WSRoot)
 	}
 	if st, err := wranglercli.Status(ctx); err == nil && strings.TrimSpace(st.AccountID) != "" {
-		id := st.AccountID
-		if c.WSRoot != "" {
-			_ = storeAccountID(c.WSRoot, id)
-		}
-		return id, nil
+		return st.AccountID, nil
 	}
-	return "", fmt.Errorf("no Cloudflare account id (set COGS_CF_ACCOUNT_ID or use a token with Account read)")
+	return "", fmt.Errorf("no Cloudflare account id (set COGS_CF_ACCOUNT_ID or use a token with Account or Zone read)")
 }
 
 func accountIDFromToken(ctx context.Context, tok string) (string, error) {

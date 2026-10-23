@@ -40,6 +40,7 @@ func init() {
 			Commit = strings.TrimSpace(string(out))
 		}
 	}
+	Version = strings.TrimSuffix(Version, "-dirty")
 }
 
 // String is the user-facing version line for `cogs version`.
@@ -48,6 +49,7 @@ func String() string {
 	if v == "" {
 		v = "dev"
 	}
+	v = strings.TrimSuffix(v, "-dirty")
 	if Commit == "" {
 		return v
 	}

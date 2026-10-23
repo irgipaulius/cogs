@@ -9,9 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
+
+const statusFailBackoff = 5 * time.Minute
 
 // AuthStatus is wrangler authentication on this host.
 type AuthStatus struct {
@@ -30,6 +34,12 @@ type whoamiJSON struct {
 	} `json:"accounts"`
 }
 
+var statusCache struct {
+	mu    sync.Mutex
+	until time.Time
+	st    AuthStatus
+}
+
 func run(ctx context.Context, args ...string) (string, error) {
 	wsRoot := strings.TrimSpace(os.Getenv("COGS_WORKSPACE_ROOT"))
 	cmd, err := wranglerexec.Command(wsRoot, args...)
@@ -45,8 +55,16 @@ func run(ctx context.Context, args ...string) (string, error) {
 	return out.String(), nil
 }
 
-// Status returns wrangler whoami when logged in.
+// Status returns wrangler whoami when logged in (cached; backs off after failures).
 func Status(ctx context.Context) (AuthStatus, error) {
+	statusCache.mu.Lock()
+	if time.Now().Before(statusCache.until) {
+		st := statusCache.st
+		statusCache.mu.Unlock()
+		return st, nil
+	}
+	statusCache.mu.Unlock()
+
 	st := AuthStatus{}
 	if _, err := exec.LookPath("wrangler"); err != nil {
 		if _, err2 := exec.LookPath("npx"); err2 != nil {
@@ -56,10 +74,17 @@ func Status(ctx context.Context) (AuthStatus, error) {
 	st.Installed = true
 	raw, err := run(ctx, "whoami", "--json")
 	if err != nil {
+		statusCache.mu.Lock()
+		statusCache.st = st
+		statusCache.until = time.Now().Add(statusFailBackoff)
+		statusCache.mu.Unlock()
 		return st, nil
 	}
 	var w whoamiJSON
 	if err := json.Unmarshal([]byte(raw), &w); err != nil {
+		statusCache.mu.Lock()
+		statusCache.until = time.Now().Add(statusFailBackoff)
+		statusCache.mu.Unlock()
 		return st, nil
 	}
 	st.LoggedIn = true
@@ -68,5 +93,13 @@ func Status(ctx context.Context) (AuthStatus, error) {
 		st.AccountID = w.Accounts[0].ID
 		st.Account = w.Accounts[0].Name
 	}
+	statusCache.mu.Lock()
+	statusCache.st = st
+	if st.LoggedIn {
+		statusCache.until = time.Now().Add(2 * time.Minute)
+	} else {
+		statusCache.until = time.Now().Add(statusFailBackoff)
+	}
+	statusCache.mu.Unlock()
 	return st, nil
 }

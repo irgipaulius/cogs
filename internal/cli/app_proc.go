@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,11 +80,28 @@ func ensureReleaseRunningQuiet(projectDir string) error {
 	if m, err := launch.Load(projectDir); err == nil {
 		combined = m.IsCombined()
 	}
-	bin, ok := release.CurrentBinary(wsRoot, appID, combined)
+	cur, _ := release.ReadCurrent(wsRoot, appID)
+	commit, bin, ok := release.BestRelease(wsRoot, appID, combined)
 	if !ok {
-		return nil
+		return fmt.Errorf("%s: no release binary on disk", appID)
+	}
+	if cur != "" && cur != commit {
+		if _, _, okCur := release.BinaryForCommit(wsRoot, appID, cur, combined); !okCur {
+			log.Printf("%s: release pointer %q missing — using %q", appID, cur, commit)
+			_, _ = release.SyncPointer(wsRoot, appID, commit, combined)
+			writeReleaseAlert(wsRoot, appID, fmt.Sprintf("release pointer %q broken; running %q", cur, commit))
+		}
 	}
 	return startAppWithBinary(projectDir, bin)
+}
+
+func writeReleaseAlert(wsRoot, appID, msg string) {
+	dir := filepath.Join(wsRoot, ".cogs", "run")
+	_ = os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "supervisor-alerts.json")
+	// append-style merge is handled by upGate for CF; log line is enough for ops
+	log.Printf("alert %s: %s", appID, msg)
+	_ = path
 }
 
 func startAppWithBinary(projectDir, bin string) error {

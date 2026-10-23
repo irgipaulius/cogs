@@ -100,7 +100,11 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 		return err
 	}
 	logPath := tunnelLogPath(projectDir, name)
-	cmd, err := cftunnel.StartCloudflared(runTok, logPath)
+	tokenPath, _ := cftunnel.WriteTokenFile(tunnelRunDir(projectDir), name, runTok)
+	cmd, err := cftunnel.StartCloudflaredWithFile(tokenPath, logPath)
+	if err != nil {
+		cmd, err = cftunnel.StartCloudflared(runTok, logPath)
+	}
 	if err != nil {
 		cmd, err = wranglerexec.Command(root, "tunnel", "run", name)
 		if err != nil {
@@ -120,7 +124,6 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 		upGate.recordTunnelFailure(key, err.Error())
 		return err
 	}
-	_, _ = cftunnel.WriteTokenFile(tunnelRunDir(projectDir), name, runTok)
 	pidPath := tunnelPIDPath(projectDir, name)
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
 		_ = cmd.Process.Kill()

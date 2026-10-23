@@ -36,6 +36,11 @@ func importLegacyOnce(s *Store) error {
 		return fmt.Errorf("legacy import workspace: %w", wsErr)
 	}
 	needImport := count == 0 && len(ws.Apps) > 0
+	if len(ws.Apps) > 0 {
+		if err := repairReleaseState(s, ws); err != nil {
+			return fmt.Errorf("release repair: %w", err)
+		}
+	}
 	if !needImport && markerExists {
 		return nil
 	}
@@ -134,26 +139,27 @@ func importWorkspaceApps(s *Store, ws wsManifest) error {
 
 func importReleasePointers(s *Store, ws wsManifest) error {
 	for _, a := range ws.Apps {
-		commit, err := release.ReadCurrent(s.wsRoot, a.Name)
-		if err != nil || commit == "" {
-			continue
-		}
 		combined := a.Name == "admin"
 		appDir := filepath.Join(s.wsRoot, filepath.FromSlash(a.Path))
 		if cfg, err := appcfg.Load(appDir); err == nil {
 			combined = cfg.Kind == "combined"
 		}
-		bin := release.BinaryPath(s.wsRoot, a.Name, commit, combined)
-		if st, err := os.Stat(bin); err != nil || st.IsDir() {
+		commit, _ := release.ReadCurrent(s.wsRoot, a.Name)
+		if commit == "" {
+			commit, _, _ = release.BestRelease(s.wsRoot, a.Name, combined)
+		}
+		resolved, bin, ok := release.BinaryForCommit(s.wsRoot, a.Name, commit, combined)
+		if !ok {
 			continue
 		}
-		id, err := s.UpsertRelease(a.Name, commit, bin, true)
+		id, err := s.UpsertRelease(a.Name, resolved, bin, true)
 		if err != nil {
 			return err
 		}
 		if id > 0 {
 			_ = s.ActivateRelease(a.Name, id)
 		}
+		_, _ = release.SyncPointer(s.wsRoot, a.Name, resolved, combined)
 	}
 	return nil
 }
@@ -207,13 +213,18 @@ func importDeployments(s *Store) error {
 	}
 	for appID, meta := range df.Meta {
 		if meta.GitCommit != "" {
-			bin := release.BinaryPath(s.wsRoot, appID, meta.GitCommit, appID == "admin")
-			id, err := s.UpsertRelease(appID, meta.GitCommit, bin, meta.LastStatus == "succeeded")
+			combined := appID == "admin"
+			resolved, bin, ok := release.BinaryForCommit(s.wsRoot, appID, meta.GitCommit, combined)
+			if !ok {
+				continue
+			}
+			id, err := s.UpsertRelease(appID, resolved, bin, meta.LastStatus == "succeeded")
 			if err != nil {
 				return err
 			}
 			if meta.LastStatus == "succeeded" && id > 0 {
 				_ = s.ActivateRelease(appID, id)
+				_, _ = release.SyncPointer(s.wsRoot, appID, resolved, combined)
 			}
 		}
 		if meta.LastStatus == "failed" {
