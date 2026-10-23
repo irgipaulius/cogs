@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+
 	"github.com/irgipaulius/cogs/pkg/cftoken"
 )
 
@@ -14,6 +16,9 @@ import (
 type Client struct {
 	WSRoot string
 	OAuth  func() (string, error)
+	// TestBase rewrites https://api.cloudflare.com to this prefix (tests only).
+	TestBase  string
+	TestToken string
 }
 
 // Token resolves a bearer for the given scope.
@@ -36,9 +41,18 @@ type APIError struct {
 
 // Do performs an authenticated Cloudflare API request.
 func (c *Client) Do(ctx context.Context, scope cftoken.Scope, method, url string, body any) (Response, error) {
-	tok, err := c.Token(ctx, scope)
-	if err != nil {
-		return Response{}, err
+	if base := strings.TrimSpace(c.TestBase); base != "" {
+		url = strings.Replace(url, "https://api.cloudflare.com", base, 1)
+	}
+	var tok string
+	var err error
+	if strings.TrimSpace(c.TestToken) != "" {
+		tok = c.TestToken
+	} else {
+		tok, err = c.Token(ctx, scope)
+		if err != nil {
+			return Response{}, err
+		}
 	}
 	var r io.Reader
 	if body != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/gitrepo"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -21,6 +22,14 @@ type doctorFinding struct {
 
 func doctorWorkspace(root string, ws workspace.Root) []doctorFinding {
 	var out []doctorFinding
+	if paths, err := gitrepo.RootOwnedGitFiles(root); err == nil {
+		if msg := gitrepo.FormatOwnershipWarning(root, paths); msg != "" {
+			out = append(out, doctorFinding{
+				OK: false, Problem: msg,
+				Fix: fmt.Sprintf("sudo chown -R $(whoami) %s/.git", root),
+			})
+		}
+	}
 	goWork := ""
 	if b, err := os.ReadFile(filepath.Join(root, "go.work")); err == nil {
 		goWork = string(b)

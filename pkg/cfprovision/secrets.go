@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/fileutil"
 	"github.com/irgipaulius/cogs/pkg/launch"
 )
 
@@ -72,6 +73,9 @@ func setEnvKey(path, key, value string) error {
 	found := false
 	for i, line := range lines {
 		if strings.HasPrefix(line, prefix) {
+			if line == prefix+value {
+				return nil
+			}
 			lines[i] = prefix + value
 			found = true
 			break
@@ -84,7 +88,7 @@ func setEnvKey(path, key, value string) error {
 	if !strings.HasSuffix(out, "\n") {
 		out += "\n"
 	}
-	return os.WriteFile(path, []byte(out), 0o600)
+	return fileutil.WriteFileIfChanged(path, []byte(out), 0o600)
 }
 
 func appendEnvKeys(path string, kv map[string]string) error {

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/fileutil"
 )
 
 const (
@@ -73,11 +75,12 @@ func Activate(wsRoot, appID, commit string) error {
 	}
 	cur, _ := ReadCurrent(wsRoot, appID)
 	if cur != "" && cur != commit {
-		if err := os.WriteFile(filepath.Join(root, previousFile), []byte(cur+"\n"), 0o644); err != nil {
+		prevPath := filepath.Join(root, previousFile)
+		if err := fileutil.WriteFileIfChanged(prevPath, []byte(cur+"\n"), 0o644); err != nil {
 			return err
 		}
 	}
-	return os.WriteFile(filepath.Join(root, currentFile), []byte(commit+"\n"), 0o644)
+	return fileutil.WriteFileIfChanged(filepath.Join(root, currentFile), []byte(commit+"\n"), 0o644)
 }
 
 // CurrentBinary returns the path to the live release binary when current is set.

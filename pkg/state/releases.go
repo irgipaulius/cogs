@@ -93,11 +93,16 @@ func (s *Store) KeepReleaseSHAs(appID string, limit int) ([]string, error) {
 	if lg != "" {
 		keep[lg] = true
 	}
+	added := 0
 	for _, r := range rels {
-		if len(keep) >= limit {
+		if keep[r.CommitSHA] {
+			continue
+		}
+		if added >= limit {
 			break
 		}
 		keep[r.CommitSHA] = true
+		added++
 	}
 	out := make([]string, 0, len(keep))
 	for sha := range keep {

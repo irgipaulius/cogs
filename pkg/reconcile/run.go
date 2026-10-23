@@ -54,7 +54,7 @@ func Run(ctx context.Context, st *state.Store, appID string, opts Options) error
 	if err != nil {
 		return err
 	}
-	_ = st.SetConverged(appID, false, "")
+	_ = st.SetConvergedOnly(appID, false)
 
 	runErr := runPipeline(ctx, st, app, runID, opts, logger)
 	if runErr != nil {
@@ -67,17 +67,25 @@ func Run(ctx context.Context, st *state.Store, appID string, opts Options) error
 	return nil
 }
 
-func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID string, opts Options, log io.Writer) error {
+func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID string, opts Options, log io.Writer) (err error) {
 	wsRoot := st.WSRoot()
 	if !app.Present {
-		return stage(st, runID, "gc", log, func() error { return gcApp(ctx, st, app.ID) })
+		return stage(st, app.ID, runID, "gc", log, func() error { return gcApp(ctx, st, app.ID) })
 	}
+
+	defer func() {
+		_ = stage(st, app.ID, runID, "gc", log, func() error { return pruneReleases(st, app.ID) })
+	}()
 
 	var appDir string
 	var tunnelID string
 	cfCfg := cfprovision.NewConfig(wsRoot, log)
+	buildCommit := strings.TrimSpace(opts.Commit)
+	if buildCommit == "" && opts.ForceRebuild {
+		buildCommit = gitHEAD(wsRoot)
+	}
 
-	if err := stage(st, runID, "source", log, func() error {
+	if err := stage(st, app.ID, runID, "source", log, func() error {
 		var gitRel string
 		var err error
 		appDir, gitRel, err = appinstall.ResolveAppDir(ctx, wsRoot, app.ID, app.Repo)
@@ -107,7 +115,7 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		return err
 	}
 
-	if err := stage(st, runID, "validate", log, func() error {
+	if err := stage(st, app.ID, runID, "validate", log, func() error {
 		if appDir == "" {
 			var e error
 			appDir, e = resolveAppDir(wsRoot, app)
@@ -123,7 +131,7 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		return err
 	}
 
-	if err := stage(st, runID, "build_workspace", log, func() error {
+	if err := stage(st, app.ID, runID, "build_workspace", log, func() error {
 		if _, err := gomod.FixLocalReplace(appDir, wsRoot); err != nil {
 			return err
 		}
@@ -132,7 +140,7 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		return err
 	}
 
-	if err := stage(st, runID, "secrets", log, func() error {
+	if err := stage(st, app.ID, runID, "secrets", log, func() error {
 		m, err := launch.Load(appDir)
 		if err != nil {
 			return err
@@ -143,36 +151,10 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		return err
 	}
 
-	if err := stage(st, runID, "cf_resources", log, func() error {
-		return cfprovision.EnsureD1R2(ctx, cfCfg, st, app, appDir)
-	}); err != nil {
-		return err
-	}
-
-	if err := stage(st, runID, "tunnel", log, func() error {
-		var err error
-		tunnelID, err = cfprovision.EnsureTunnel(ctx, cfCfg, st, app, appDir)
-		return err
-	}); err != nil {
-		return err
-	}
-
-	if err := stage(st, runID, "worker", log, func() error {
-		return cfprovision.EnsureWorker(ctx, cfCfg, st, app, appDir)
-	}); err != nil {
-		return err
-	}
-
-	if err := stage(st, runID, "dns", log, func() error {
-		return cfprovision.EnsureDNS(ctx, cfCfg, st, app, appDir, tunnelID)
-	}); err != nil {
-		return err
-	}
-
-	buildErr := stage(st, runID, "build_release", log, func() error {
+	buildErr := stage(st, app.ID, runID, "build_release", log, func() error {
 		detail, err := deploy.DeployBackend(ctx, wsRoot, deploy.Options{
 			AppID:  app.ID,
-			Commit: opts.Commit,
+			Commit: buildCommit,
 			Mode:   app.DeployMode,
 			Action: "reconcile",
 		})
@@ -182,22 +164,19 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		fmt.Fprintln(log, detail)
 		return nil
 	})
-	if buildErr != nil {
-		cur, _, _ := st.CurrentRelease(app.ID)
-		if cur != "" {
-			short := cur
-			if len(short) > 7 {
-				short = short[:7]
-			}
-			msg := fmt.Sprintf("build failed (still serving %s): %v", short, buildErr)
-			fmt.Fprintln(log, msg)
-			_ = st.SetConverged(app.ID, false, msg)
-			return fmt.Errorf("%s", msg)
+	buildFailed := buildErr != nil
+	if buildFailed {
+		m, _ := launch.Load(appDir)
+		combined := m.IsCombined()
+		if _, ok := release.CurrentBinary(wsRoot, app.ID, combined); !ok {
+			return buildErr
 		}
-		return buildErr
+		msg := fmt.Sprintf("build failed (continuing with existing release): %v", buildErr)
+		fmt.Fprintln(log, msg)
+		_ = st.SetConverged(app.ID, false, msg)
 	}
 
-	if err := stage(st, runID, "migrate", log, func() error {
+	if err := stage(st, app.ID, runID, "migrate", log, func() error {
 		m, _ := launch.Load(appDir)
 		bin, ok := release.CurrentBinary(wsRoot, app.ID, m.IsCombined())
 		if !ok {
@@ -215,11 +194,38 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		return err
 	}
 
-	_ = stage(st, runID, "activate", log, func() error { return nil })
-	return stage(st, runID, "gc", log, func() error { return pruneReleases(st, app.ID) })
+	_ = stage(st, app.ID, runID, "activate", log, func() error { return nil })
+
+	var cfErrs []string
+	if err := softStage(st, app.ID, runID, "cf_resources", log, func() error {
+		return cfprovision.EnsureD1R2(ctx, cfCfg, st, app, appDir)
+	}); err != nil {
+		cfErrs = append(cfErrs, err.Error())
+	}
+	if err := softStage(st, app.ID, runID, "tunnel", log, func() error {
+		var err error
+		tunnelID, err = cfprovision.EnsureTunnel(ctx, cfCfg, st, app, appDir)
+		return err
+	}); err != nil {
+		cfErrs = append(cfErrs, err.Error())
+	}
+	if err := softStage(st, app.ID, runID, "worker", log, func() error {
+		return cfprovision.EnsureWorker(ctx, cfCfg, st, app, appDir)
+	}); err != nil {
+		cfErrs = append(cfErrs, err.Error())
+	}
+	if err := softStage(st, app.ID, runID, "dns", log, func() error {
+		return cfprovision.EnsureDNS(ctx, cfCfg, st, app, appDir, tunnelID)
+	}); err != nil {
+		cfErrs = append(cfErrs, err.Error())
+	}
+	if len(cfErrs) > 0 {
+		return fmt.Errorf("%s", strings.Join(cfErrs, "; "))
+	}
+	return nil
 }
 
-func stage(st *state.Store, runID, name string, log io.Writer, fn func() error) error {
+func stage(st *state.Store, appID, runID, name string, log io.Writer, fn func() error) error {
 	_ = st.UpdateRunStage(runID, name, "running")
 	fmt.Fprintf(log, "\n=== %s ===\n", name)
 	err := fn()
@@ -228,12 +234,17 @@ func stage(st *state.Store, runID, name string, log io.Writer, fn func() error) 
 	if err != nil {
 		status = "failed"
 		errMsg = err.Error()
+		_ = st.SetConverged(appID, false, errMsg)
 	}
 	_ = st.RecordStage(runID, name, status, "", errMsg)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func softStage(st *state.Store, appID, runID, name string, log io.Writer, fn func() error) error {
+	return stage(st, appID, runID, name, log, fn)
 }
 
 func resolveAppDir(wsRoot string, app state.AppView) (string, error) {

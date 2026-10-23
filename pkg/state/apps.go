@@ -164,6 +164,20 @@ func (s *Store) SetConverged(appID string, converged bool, lastErr string) error
 	return err
 }
 
+// SetConvergedOnly updates the convergence flag without clearing last_error.
+func (s *Store) SetConvergedOnly(appID string, converged bool) error {
+	c := 0
+	if converged {
+		c = 1
+	}
+	_, err := s.db.Exec(`UPDATE apps SET converged=?, updated_at=? WHERE id=?`,
+		c, time.Now().UTC().Format(time.RFC3339), appID)
+	if err == nil {
+		s.notify()
+	}
+	return err
+}
+
 // ClearHostnames removes hostname claims for an app.
 func (s *Store) ClearHostnames(appID string) error {
 	_, err := s.db.Exec(`DELETE FROM hostnames WHERE app_id=?`, appID)

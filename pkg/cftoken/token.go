@@ -28,6 +28,11 @@ type Resolver struct {
 // For returns a bearer token for Cloudflare API calls.
 func (r *Resolver) For(ctx context.Context, scope Scope) (string, error) {
 	_ = ctx
+	if scope == ScopeQueue {
+		if t := strings.TrimSpace(os.Getenv("COGS_CF_QUEUE_API_TOKEN")); t != "" {
+			return t, nil
+		}
+	}
 	if t := strings.TrimSpace(os.Getenv("COGS_CF_API_TOKEN")); t != "" {
 		return t, nil
 	}

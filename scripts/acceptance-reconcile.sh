@@ -5,7 +5,8 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 set -euo pipefail
 
-ROOT="${COGS_ROOT:-$(pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${COGS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 COOKIE="${COGS_ADMIN_COOKIE:-}"
 PASS=0
 FAIL=0

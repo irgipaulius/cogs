@@ -13,8 +13,11 @@ import (
 	"github.com/irgipaulius/cogs/pkg/state"
 )
 
-// EnsureD1R2 creates optional D1 and R2 resources.
+// EnsureD1R2 creates optional D1 and R2 resources via Cloudflare API (CoGS token).
 func EnsureD1R2(ctx context.Context, cfg Config, st *state.Store, app state.AppView, appDir string) error {
+	if cfg.Client == nil {
+		cfg.Client = &cfclient.Client{WSRoot: st.WSRoot()}
+	}
 	m, err := launch.Load(appDir)
 	if err != nil {
 		return err
@@ -22,15 +25,19 @@ func EnsureD1R2(ctx context.Context, cfg Config, st *state.Store, app state.AppV
 	if m.IsCombined() {
 		return nil
 	}
+	accountID, err := cfg.Client.AccountID(ctx)
+	if err != nil {
+		return err
+	}
 	if strings.TrimSpace(m.D1Name) != "" {
-		if err := wranglerTryCreate(st.WSRoot(), "d1", "create", m.D1Name); err != nil {
+		if err := ensureD1Database(ctx, cfg.Client, accountID, m.D1Name); err != nil {
 			return fmt.Errorf("d1: %w", err)
 		}
 		_ = st.RecordOwned(app.ID, "d1", m.D1Name, `{}`)
 		logf(cfg.Log, "D1 %s", m.D1Name)
 	}
 	if m.Attachments && strings.TrimSpace(m.R2Bucket) != "" {
-		if err := wranglerTryCreate(st.WSRoot(), "r2", "bucket", "create", m.R2Bucket); err != nil {
+		if err := ensureR2Bucket(ctx, cfg.Client, accountID, m.R2Bucket); err != nil {
 			return fmt.Errorf("r2: %w", err)
 		}
 		_ = st.RecordOwned(app.ID, "r2", m.R2Bucket, `{}`)
@@ -56,12 +63,12 @@ func EnsureTunnel(ctx context.Context, cfg Config, st *state.Store, app state.Ap
 	if tunnelName == "" {
 		tunnelName = "cogs-" + app.ID
 	}
-	if err := wranglerTryCreate(st.WSRoot(), "tunnel", "create", tunnelName); err != nil {
-		return "", fmt.Errorf("tunnel create: %w", err)
-	}
 	tunnelID, err = cftunnel.FindID(ctx, cfg.Client, accountID, tunnelName)
 	if err != nil {
-		return "", err
+		tunnelID, err = tunnelCreateViaAPI(ctx, cfg.Client, accountID, tunnelName)
+		if err != nil {
+			return "", fmt.Errorf("tunnel create: %w", apiPermissionHint("Tunnel", err))
+		}
 	}
 	meta, _ := json.Marshal(map[string]string{"name": tunnelName})
 	_ = st.RecordOwned(app.ID, "tunnel", tunnelID, string(meta))

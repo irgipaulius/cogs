@@ -112,7 +112,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	if err := writeBootScript(root); err != nil {
 		return err
 	}
-	gcWranglerLogs()
+	gcWranglerLogs(root)
 	boot.LoadUpEnvIntoProcess(root)
 	attachUpLog(root)
 	defer closeUpLog()
@@ -143,6 +143,14 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 		ensureSupervisorRunning(root)
 		for _, a := range ws.Apps {
 			dir := filepath.Join(root, a.Path)
+			if !appDirLooksLikeApp(dir) && st != nil {
+				if v, err := st.GetApp(a.Name); err == nil && v.AppPath != "" {
+					alt := filepath.Join(root, filepath.FromSlash(v.AppPath))
+					if appDirLooksLikeApp(alt) {
+						dir = alt
+					}
+				}
+			}
 			if !appDirLooksLikeApp(dir) {
 				continue
 			}
@@ -164,15 +172,10 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 			}
 		}
 		upGate.writeAlerts(root)
-		if st != nil && rec != nil {
+		if st != nil {
 			views, err := st.ListApps()
 			if err == nil && len(views) == 0 && len(ws.Apps) > 0 {
 				log.Printf("state.db has 0 apps but workspace has %d — re-open state or run cogs doctor", len(ws.Apps))
-			}
-			for _, v := range views {
-				if v.Present && !v.Converged {
-					rec.Enqueue(v.ID, reconcile.Options{})
-				}
 			}
 		}
 	}

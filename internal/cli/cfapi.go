@@ -96,7 +96,7 @@ func cfTokenQueue(projectDir string) (string, error) {
 	r := cftoken.Resolver{WSRoot: wsRoot, OAuth: wranglerOAuthToken}
 	tok, err := r.For(context.Background(), cftoken.ScopeQueue)
 	if err != nil {
-		return "", fmt.Errorf("queue API needs COGS_CF_API_TOKEN with Account.Queues Read or a valid wrangler login: %w", err)
+		return "", fmt.Errorf("queue API needs COGS_CF_QUEUE_API_TOKEN or COGS_CF_API_TOKEN with Account → Queues → Read and Messages → Consume: %w", err)
 	}
 	return tok, nil
 }

@@ -11,9 +11,14 @@ import (
 	"github.com/irgipaulius/cogs/pkg/wranglerpaths"
 )
 
+const wranglerRunLogMax = 2 << 20 // 2 MiB
+
 const wranglerLogKeep = 200
 
-func gcWranglerLogs() {
+func gcWranglerLogs(wsRoot string) {
+	if wsRoot != "" {
+		rotateWranglerLog(filepath.Join(wsRoot, ".cogs", "run", "wrangler.log"))
+	}
 	home := hostenv.ServiceHome()
 	if home == "" {
 		home, _ = os.UserHomeDir()
@@ -71,4 +76,20 @@ func gcLogDir(dir string) int {
 		}
 	}
 	return removed
+}
+
+func rotateWranglerLog(path string) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= wranglerRunLogMax {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	keep := b
+	if len(keep) > wranglerRunLogMax/2 {
+		keep = keep[len(keep)-wranglerRunLogMax/2:]
+	}
+	_ = os.WriteFile(path, append([]byte("… truncated …\n"), keep...), 0o644)
 }
