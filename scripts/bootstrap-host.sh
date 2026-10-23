@@ -3,6 +3,23 @@
 set -euo pipefail
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+install_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+  case "$OS" in
+    freebsd) sudo pkg install -y jq ;;
+    darwin) brew install jq ;;
+    linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y jq
+      else
+        echo "Install jq for acceptance tests (pkg/apt/brew)" >&2
+      fi
+      ;;
+  esac
+}
+
 install_gh() {
   if command -v gh >/dev/null 2>&1; then
     return 0
@@ -23,6 +40,7 @@ install_gh() {
 }
 
 echo "=== CoGS host bootstrap ==="
+install_jq
 install_gh
 
 echo "GitHub (repo access for admin + pull-mode builds)"
