@@ -134,16 +134,17 @@ func doctorOne(dir string, a workspace.App, goWork string) []doctorFinding {
 				})
 			}
 		}
-		distCfg := filepath.Join(appbuild.PagesDistDir(dir), "config.js")
-		b, err := os.ReadFile(distCfg)
-		if err != nil && !m.IsCombined() {
-			out = append(out, doctorFinding{
-				App: app, OK: false,
-				Problem: ".cogs/pages-dist missing (Worker UI not built for production)",
-				Fix:     "wait for reconcile worker stage or run: cogs launch " + app + " -y",
-			})
-		} else if err == nil && !m.IsCombined() {
-			if !configDeclares(string(b), wantPage, wantAPI) {
+		if appbuild.HasFrontend(dir) && !m.IsCombined() {
+			_ = appbuild.WritePageConfig(dir, wantPage, wantAPI, m)
+			distCfg := filepath.Join(appbuild.PagesDistDir(dir), "config.js")
+			b, err := os.ReadFile(distCfg)
+			if err != nil {
+				out = append(out, doctorFinding{
+					App: app, OK: false,
+					Problem: ".cogs/pages-dist missing (Worker UI not built for production)",
+					Fix:     "wait for reconcile worker stage or run: cogs launch " + app + " -y",
+				})
+			} else if !configDeclares(string(b), wantPage, wantAPI) {
 				out = append(out, doctorFinding{
 					App: app, OK: false,
 					Problem: "pages-dist config.js does not point at https://" + wantAPI,
