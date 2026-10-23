@@ -54,13 +54,21 @@ func (r *Resolver) For(ctx context.Context, scope Scope) (string, error) {
 			return t, nil
 		}
 	}
+	var reasons []string
 	if r.OAuth != nil {
 		if t, err := r.OAuth(); err == nil && t != "" {
 			return t, nil
+		} else if err != nil {
+			reasons = append(reasons, err.Error())
 		}
 	}
 	if t, err := WranglerOAuthToken(); err == nil && t != "" {
 		return t, nil
+	} else if err != nil {
+		reasons = append(reasons, err.Error())
 	}
-	return "", fmt.Errorf("no Cloudflare token — run wrangler login or set COGS_CF_API_TOKEN")
+	if len(reasons) == 0 {
+		reasons = append(reasons, "set COGS_CF_API_TOKEN or run wrangler login")
+	}
+	return "", fmt.Errorf("no Cloudflare token — %s", strings.Join(reasons, "; "))
 }
