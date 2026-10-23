@@ -11,7 +11,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
-	"github.com/irgipaulius/cogs/pkg/gowork"
+	"github.com/irgipaulius/cogs/pkg/buildenv"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -386,7 +386,7 @@ func runGo(dir string, args ...string) error {
 	wsRoot, _, _ := workspace.FindRoot(dir)
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
-	env, err := gowork.BuildEnv(wsRoot, dir, os.Environ())
+	env, err := buildenv.EnvForBuild(wsRoot, dir, os.Environ())
 	if err != nil {
 		return err
 	}

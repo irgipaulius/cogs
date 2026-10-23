@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/irgipaulius/cogs/pkg/gowork"
+	"github.com/irgipaulius/cogs/pkg/buildenv"
 )
 
 // ServiceHome is HOME for gh/wrangler when CoGS runs as a dedicated user (e.g. /home/cogs).
@@ -45,7 +45,7 @@ func setEnv(env []string, key, val string) []string {
 // CogsCommandContext runs the host cogs CLI (PATH or go run from workspace root).
 func CogsCommandContext(ctx context.Context, wsRoot string, args ...string) *exec.Cmd {
 	base := append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
-	env, _ := gowork.BuildEnv(wsRoot, wsRoot, base)
+	env, _ := buildenv.EnvForBuild(wsRoot, wsRoot, base)
 	if bin, err := exec.LookPath("cogs"); err == nil {
 		cmd := exec.CommandContext(ctx, bin, args...)
 		cmd.Dir = wsRoot

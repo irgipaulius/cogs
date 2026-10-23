@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
-	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -64,12 +63,6 @@ func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode, gitRootRel strin
 		GitRoot: gitRootRel,
 	}); err != nil {
 		return "", err
-	}
-	_ = gowork.InitBestEffort(wsRoot)
-	if hasGoMod(appDir) {
-		if err := gowork.EnsureModule(wsRoot, rel); err != nil {
-			return "", err
-		}
 	}
 	return fmt.Sprintf("registered %s at %s", name, rel), nil
 }

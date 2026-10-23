@@ -17,9 +17,10 @@ import (
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/githubauth"
 	"github.com/irgipaulius/cogs/pkg/gomod"
-	"github.com/irgipaulius/cogs/pkg/gowork"
+	"github.com/irgipaulius/cogs/pkg/buildenv"
 	"github.com/irgipaulius/cogs/pkg/procspawn"
 	"github.com/irgipaulius/cogs/pkg/release"
+	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -35,9 +36,6 @@ type Options struct {
 
 // DeployBackend builds at commit, health-checks, activates release pointer, restarts app.
 func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail string, err error) {
-	if err := gowork.EnsureOverlayHealthy(wsRoot); err != nil {
-		return "", err
-	}
 	_, ws, err := workspace.FindRoot(wsRoot)
 	if err != nil {
 		return "", err
@@ -108,7 +106,7 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	if err := os.MkdirAll(filepath.Dir(outBin), 0o755); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
-	if err := goBuild(ctx, wsRoot, buildDir, outBin); err != nil {
+	if err := goBuild(ctx, wsRoot, appID, buildDir, outBin); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
 	// Smoke-test the candidate from the live app dir: .env (gitignored, so absent
@@ -120,6 +118,7 @@ func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail str
 	if err := release.Activate(wsRoot, appID, commit); err != nil {
 		return failDeploy(wsRoot, ev, err)
 	}
+	recordReleaseState(wsRoot, appID, commit, outBin, true)
 	restart := opts.Restart
 	if restart == nil {
 		restart = defaultRestart(appDir)
@@ -176,6 +175,21 @@ func RollbackBackend(ctx context.Context, wsRoot, appID string, restart func(app
 	return ev.Detail, nil
 }
 
+func recordReleaseState(wsRoot, appID, commit, binaryPath string, healthOK bool) {
+	st, err := state.Open(wsRoot)
+	if err != nil {
+		return
+	}
+	defer st.Close()
+	id, err := st.UpsertRelease(appID, commit, binaryPath, healthOK)
+	if err != nil || id <= 0 {
+		return
+	}
+	if healthOK {
+		_ = st.ActivateRelease(appID, id)
+	}
+}
+
 func failDeploy(wsRoot string, ev cockpit.DeployEvent, err error) (string, error) {
 	ev.Status = "failed"
 	ev.Detail = err.Error()
@@ -183,12 +197,20 @@ func failDeploy(wsRoot string, ev cockpit.DeployEvent, err error) (string, error
 	return ev.Detail, err
 }
 
-func goBuild(ctx context.Context, wsRoot, appDir, outBin string) error {
+func goBuild(ctx context.Context, wsRoot, appID, appDir, outBin string) error {
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outBin, "./cmd/app")
 	cmd.Dir = appDir
-	env, err := gowork.BuildEnv(wsRoot, appDir, append(os.Environ(), "CGO_ENABLED=0"))
+	env, err := buildenv.EnvForBuild(wsRoot, appDir, append(os.Environ(), "CGO_ENABLED=0"))
 	if err != nil {
 		return err
+	}
+	if buildenv.IsHermetic(appDir) {
+		var cleanup func()
+		_, env, cleanup, err = buildenv.PrepareWorktreeBuild(wsRoot, appID, filepath.Base(appDir), appDir)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 	}
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()

@@ -52,7 +52,19 @@ cogs up    # or cogs up --foreground in Docker
 | **Rollback** | `rollback` | Swap to **previous** release under `.cogs/releases/<app>/` and restart. |
 | Hosting tab | (cockpit data) | `deploy_mode`, commit, `last_status`, `last_error`, recent deploy events |
 
-Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared event format for push and pull).
+Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared event format for push and pull). App lifecycle state (desired present, releases, reconcile runs) lives in **`.cogs/state.db`** (SQLite).
+
+## Install, reconcile, remove (root only)
+
+| Action | API | Effect |
+|--------|-----|--------|
+| **Add app** | `POST /api/apps` | `SetDesired(present=true)` + background reconcile |
+| **Reconcile** | `POST /api/apps/{name}/reconcile` | Re-run idempotent pipeline |
+| **Remove** | `POST /api/apps/{name}/remove` | `present=false` + GC reconcile |
+| **Progress** | `GET /api/reconcile/stream` (SSE) | `event: apps` — JSON array of app reconcile snapshots |
+| **Log** | `GET /api/apps/{name}/reconcile/log` | Latest reconcile log file |
+
+There is **no** finish-install or install-job API.
 
 ## GitHub and Add app (root only)
 
@@ -85,12 +97,11 @@ Run both as the user that starts **admin** and **`cogs up`**. Private repos: the
 
 **Install flow (default):**
 
-1. If the workspace git **origin** is the selected repo, use the existing checkout; otherwise **`gh repo clone`** into `.cogs/clones/<owner-repo>/`.
-2. Find **`cogs.app.toml`** (repo root or `apps/*/cogs.app.toml`).
-3. Register path in **`cogs.workspace.json`**, **`go work use`** when the app has `go.mod`.
-4. Background **`cogs launch <appdir> -y --no-serve`** on the server.
+1. **`POST /api/apps`** writes desired state to **`.cogs/state.db`** and enqueues **reconcile**.
+2. Reconcile stages: source → validate → build workspace → secrets → Cloudflare (`cogs launch -y --no-serve`) → build release → migrate → activate → GC.
+3. Watch progress on **Apps** via **`GET /api/reconcile/stream`** (SSE).
 
-CLI equivalent: `gh auth login`, add app manually per [deploy.md](deploy.md), then **`cogs launch <app> -y`**.
+CLI equivalent: register app per [deploy.md](deploy.md), then **`cogs launch <app> -y`** or trigger **`POST /api/apps/{name}/reconcile`**.
 
 ## RBAC
 

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
-	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -82,10 +81,6 @@ git_repo = %q
 		GitRepo: opts.GitRepo,
 		GitRoot: "",
 	}); err != nil {
-		return "", err
-	}
-	_ = gowork.InitBestEffort(opts.WSRoot)
-	if err := gowork.EnsureModule(opts.WSRoot, rel); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("created %s", appDir), nil

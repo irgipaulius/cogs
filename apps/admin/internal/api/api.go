@@ -11,7 +11,8 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
-	"github.com/irgipaulius/cogs/pkg/installjob"
+	"github.com/irgipaulius/cogs/pkg/reconcile"
+	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/supervisor"
 )
 
@@ -28,7 +29,8 @@ type Server struct {
 	reposCache []ghcli.Repo
 	reposAt    time.Time
 
-	Installs *installjob.Manager
+	StateDB    *state.Store
+	Reconciler *reconcile.Manager
 }
 
 func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
@@ -52,13 +54,10 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("GET /api/repos", s.auth(s.handleRepos))
 	mux.HandleFunc("GET /api/repos/preview", s.auth(s.handleRepoPreview))
 	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
-	mux.HandleFunc("POST /api/apps/{name}/remove", s.auth(s.handleRemoveApp))
-	mux.HandleFunc("POST /api/apps/{name}/finish-install", s.auth(s.handleFinishInstall))
-	mux.HandleFunc("GET /api/installs", s.auth(s.handleListInstalls))
-	mux.HandleFunc("GET /api/installs/stream", s.auth(s.handleInstallStream))
-	mux.HandleFunc("GET /api/installs/{id}", s.auth(s.handleGetInstall))
-	mux.HandleFunc("GET /api/installs/{id}/log", s.auth(s.handleInstallLog))
-	mux.HandleFunc("POST /api/installs/{id}/retry", s.auth(s.handleInstallRetry))
+	mux.HandleFunc("POST /api/apps/{name}/remove", s.auth(s.handleAppRemoveReconcile))
+	mux.HandleFunc("POST /api/apps/{name}/reconcile", s.auth(s.handleAppReconcile))
+	mux.HandleFunc("GET /api/reconcile/stream", s.auth(s.handleReconcileStream))
+	mux.HandleFunc("GET /api/apps/{name}/reconcile/log", s.auth(s.handleReconcileLog))
 	mux.HandleFunc("GET /api/hostnames/check", s.auth(s.handleHostnameCheck))
 	mux.HandleFunc("GET /api/users", s.auth(s.handleListUsers))
 	mux.HandleFunc("POST /api/users", s.auth(s.handleCreateUser))

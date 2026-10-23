@@ -141,7 +141,8 @@ export default function App() {
   const [sqlLoading, setSqlLoading] = useState(false);
   const [tables, setTables] = useState([]);
   const [addAppOpen, setAddAppOpen] = useState(false);
-  const [installs, setInstalls] = useState([]);
+  const [reconcileApps, setReconcileApps] = useState([]);
+  const [actionErr, setActionErr] = useState('');
   const [authStatus, setAuthStatus] = useState(null);
 
   useEffect(() => {
@@ -229,18 +230,15 @@ export default function App() {
 
   useEffect(() => {
     if (!me?.is_root || panel !== 'apps') return;
-    const es = new EventSource('/api/installs/stream');
-    const onInstalls = (ev) => {
+    const es = new EventSource('/api/reconcile/stream');
+    const onApps = (ev) => {
       try {
-        setInstalls(JSON.parse(ev.data));
+        setReconcileApps(JSON.parse(ev.data));
       } catch {
         /* ignore */
       }
     };
-    es.addEventListener('installs', onInstalls);
-    api('/api/installs')
-      .then((data) => setInstalls(Array.isArray(data) ? data : []))
-      .catch(() => setInstalls([]));
+    es.addEventListener('apps', onApps);
     return () => es.close();
   }, [me, panel]);
 
@@ -264,52 +262,89 @@ export default function App() {
     }
   }, [panel, me]);
 
-  const activeInstalls = useMemo(
-    () =>
-      (installs || []).filter(
-        (j) => j.status === 'running' || j.status === 'failed',
-      ),
-    [installs],
-  );
+  const reconcileByID = useMemo(() => {
+    const m = {};
+    (reconcileApps || []).forEach((a) => {
+      if (a?.id) m[a.id] = a;
+    });
+    return m;
+  }, [reconcileApps]);
 
-  const installStageLabel = (job) => {
-    const order = [
-      'clone',
-      'discover',
-      'prepare',
-      'register',
-      'build',
-      'launch',
-      'health',
-      'done',
-    ];
+  const RECONCILE_STAGES = [
+    'source',
+    'validate',
+    'build_workspace',
+    'secrets',
+    'cf_resources',
+    'tunnel',
+    'worker',
+    'dns',
+    'build_release',
+    'migrate',
+    'activate',
+    'gc',
+  ];
+
+  const reconcileStageLabel = (appRow) => {
     const labels = {
-      clone: 'Cloning repository',
-      discover: 'Reading configuration',
-      prepare: 'Preparing workspace',
-      register: 'Registering app',
-      build: 'Building backend',
-      launch: 'Provisioning & deploy',
-      health: 'Health check',
-      done: 'Complete',
+      source: 'Fetching source',
+      validate: 'Validating config',
+      build_workspace: 'Build workspace',
+      secrets: 'Secrets',
+      cf_resources: 'D1 / R2 / KV',
+      tunnel: 'Cloudflare tunnel',
+      worker: 'Worker & routes',
+      dns: 'DNS & ingress',
+      build_release: 'Building release',
+      migrate: 'Database migrate',
+      activate: 'Activating release',
+      gc: 'Cleanup',
     };
-    const cur = job.current_stage || 'clone';
-    const idx = order.indexOf(cur);
+    const cur = appRow.current_stage || 'source';
+    const idx = RECONCILE_STAGES.indexOf(cur);
     const n = idx >= 0 ? idx + 1 : 1;
-    return `${labels[cur] || cur} (${n}/${order.length})`;
+    return `${labels[cur] || cur} (${n}/${RECONCILE_STAGES.length})`;
   };
+
+  const activeReconcile = useMemo(
+    () =>
+      (reconcileApps || []).filter(
+        (a) =>
+          a.present &&
+          (!a.converged || a.reconcile_status === 'running'),
+      ),
+    [reconcileApps],
+  );
 
   const appsList = useMemo(() => {
     const names = new Set();
     (board?.latest?.apps || []).forEach((a) => names.add(a.name));
     Object.keys(board?.deploy_meta || {}).forEach((n) => names.add(n));
     (board?.registry?.apps || []).forEach((a) => names.add(a.app_name));
-    activeInstalls.forEach((j) => {
-      const n = j.app_name || j.request?.name;
-      if (n) names.add(n);
+    (reconcileApps || []).forEach((a) => {
+      if (a.present && a.id) names.add(a.id);
     });
     return [...names].filter((n) => n !== 'admin').sort();
-  }, [board, activeInstalls]);
+  }, [board, reconcileApps]);
+
+  async function triggerReconcile(name) {
+    setActionErr('');
+    try {
+      await api(`/api/apps/${encodeURIComponent(name)}/reconcile`, { method: 'POST' });
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    }
+  }
+
+  async function removeApp(name) {
+    if (!window.confirm(`Remove ${name} from CoGS?`)) return;
+    setActionErr('');
+    try {
+      await api(`/api/apps/${encodeURIComponent(name)}/remove`, { method: 'POST' });
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    }
+  }
 
   const appMeta = (name) => board?.deploy_meta?.[name] || {};
   const appMetrics = (name) => (board?.latest?.apps || []).find((a) => a.name === name) || {};
@@ -491,56 +526,56 @@ export default function App() {
                   onAdded={() => {
                     api('/api/auth/status').then(setAuthStatus);
                     api('/api/metrics/latest').then(setBoard);
-                    api('/api/installs')
-                      .then((data) => setInstalls(Array.isArray(data) ? data : []))
-                      .catch(() => {});
                   }}
                 />
               </>
             )}
+            {actionErr && <p className="err">{actionErr}</p>}
             <div className="app-grid">
-              {activeInstalls.map((job) => {
-                const label =
-                  job.app_name ||
-                  job.request?.name ||
-                  (job.request?.repo || '').split('/').pop() ||
-                  'Installing…';
-                const failed = job.status === 'failed';
+              {activeReconcile
+                .filter((a) => a.reconcile_status === 'running' || !a.converged)
+                .map((row) => {
+                const failed = row.reconcile_status === 'failed' || (!row.converged && row.last_error);
+                const running = row.reconcile_status === 'running';
                 return (
                   <div
-                    key={job.id}
-                    className={`app-card app-card--install${failed ? ' app-card--install-failed' : ''}`}
+                    key={row.id}
+                    className={`app-card app-card--install${failed && !running ? ' app-card--install-failed' : ''}`}
                   >
                     <div className="app-card-head">
-                      <h4>{label}</h4>
-                      <span className={`status-pill ${failed ? 'down' : 'installing'}`}>
-                        {failed ? 'Failed' : 'Installing'}
+                      <h4>{row.id}</h4>
+                      <span className={`status-pill ${failed && !running ? 'down' : 'installing'}`}>
+                        {running ? 'Reconciling' : failed ? 'Failed' : 'Pending'}
                       </span>
                     </div>
-                    {!failed && (
+                    {running && (
                       <div className="install-progress">
                         <CogsMark size={22} spin />
-                        <span>{installStageLabel(job)}</span>
+                        <span>{reconcileStageLabel(row)}</span>
                       </div>
                     )}
-                    {failed && (
+                    {failed && !running && (
                       <>
-                        <p className="err">{job.error || 'Install failed'}</p>
-                        {job.current_stage && (
-                          <p className="muted">Failed during {job.current_stage}</p>
-                        )}
+                        <p className="err">{row.last_error || 'Reconcile failed'}</p>
+                        {row.current_commit &&
+                          row.last_good_commit &&
+                          row.current_commit === row.last_good_commit && (
+                            <p className="muted">
+                              Build failed (still serving {row.last_good_commit.slice(0, 7)})
+                            </p>
+                          )}
                         <div className="install-actions">
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
                             onClick={() =>
-                              api(`/api/installs/${encodeURIComponent(job.id)}/log`).then((d) => {
+                              api(`/api/apps/${encodeURIComponent(row.id)}/reconcile/log`).then((d) => {
                                 const w = window.open('', '_blank');
                                 if (w) {
-                                  w.document.title = `Install ${job.id}`;
+                                  w.document.title = `Reconcile ${row.id}`;
                                   w.document.body.innerHTML = `<pre>${(d.log || '').replace(/</g, '&lt;')}</pre>`;
                                 }
-                              })
+                              }).catch((ex) => setActionErr(ex.message))
                             }
                           >
                             View log
@@ -548,13 +583,9 @@ export default function App() {
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
-                            onClick={() =>
-                              api(`/api/installs/${encodeURIComponent(job.id)}/retry`, {
-                                method: 'POST',
-                              }).catch((ex) => alert(ex.message))
-                            }
+                            onClick={() => triggerReconcile(row.id)}
                           >
-                            Retry
+                            Reconcile
                           </button>
                         </div>
                       </>
@@ -565,10 +596,8 @@ export default function App() {
               {appsList
                 .filter(
                   (name) =>
-                    !activeInstalls.some(
-                      (j) =>
-                        (j.app_name || j.request?.name) === name &&
-                        j.status === 'running',
+                    !activeReconcile.some(
+                      (a) => a.id === name && a.reconcile_status === 'running',
                     ),
                 )
                 .map((name) => {
@@ -577,18 +606,20 @@ export default function App() {
                 const t = appTel(name);
                 const live = !!m.running;
                 const prov = board?.provision?.[name];
+                const rec = reconcileByID[name];
                 const notReady = prov && !prov.ready;
                 return (
                   <button key={name} type="button" className="app-card" onClick={() => go(`app/${name}/hosting`)}>
                     <div className="app-card-head">
                       <h4>{name}</h4>
                       <span className={`status-pill ${notReady ? 'down' : live ? 'live' : 'down'}`}>
-                        {notReady ? 'Not provisioned' : live ? 'Live' : 'Offline'}
+                        {notReady ? 'Reconciling' : live ? 'Live' : 'Offline'}
                       </span>
                     </div>
                     {notReady && prov.reasons?.[0] && (
                       <p className="err">{prov.reasons[0]}</p>
                     )}
+                    {rec?.public_url && <p className="url">{rec.public_url}</p>}
                     <div className="app-card-stat">
                       <span>
                         {live ? (m.pid ? `PID ${m.pid}` : 'Health check OK') : 'Not responding'}

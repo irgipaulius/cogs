@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -87,15 +89,12 @@ func cfTokenTunnel() (string, error) {
 
 // cfTokenQueue prefers a Cloudflare API token (Queues) and falls back to the Wrangler OAuth session.
 func cfTokenQueue(projectDir string) (string, error) {
-	if t := strings.TrimSpace(os.Getenv("COGS_CF_API_TOKEN")); t != "" {
-		return t, nil
+	wsRoot := projectDir
+	if root, _, err := workspace.FindRoot(projectDir); err == nil {
+		wsRoot = root
 	}
-	if wsRoot, _, err := workspace.FindRoot(projectDir); err == nil {
-		if t, err := workspace.DNSTokenForZone(wsRoot, ""); err == nil && t != "" {
-			return t, nil
-		}
-	}
-	tok, err := wranglerOAuthToken()
+	r := cftoken.Resolver{WSRoot: wsRoot, OAuth: wranglerOAuthToken}
+	tok, err := r.For(context.Background(), cftoken.ScopeQueue)
 	if err != nil {
 		return "", fmt.Errorf("queue API needs COGS_CF_API_TOKEN with Account.Queues Read or a valid wrangler login: %w", err)
 	}

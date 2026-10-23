@@ -45,6 +45,8 @@ func Run(args []string) error {
 		return cmdUp(args[1:])
 	case "down":
 		return cmdDown(args[1:])
+	case "remove":
+		return cmdRemove(args[1:])
 	case "github":
 		return cmdGitHub(args[1:])
 	case "host":
@@ -103,6 +105,7 @@ Usage:
   cogs doctor                     check zone, DNS token, tunnels, ports, go.work, config.js
   cogs up [--foreground]          supervise apps and tunnels; writes .cogs/boot/cogs-up.sh
   cogs down                       stop the apps and tunnels cogs up started
+  cogs remove <app>               remove app, Cloudflare resources, and local artifacts
   cogs cf whoami | r2 | d1 | pages | worker | kv ...
   cogs version
 

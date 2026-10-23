@@ -5,7 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/state"
 )
+
+func openStateStore(wsRoot string) (*state.Store, error) {
+	return state.Open(wsRoot)
+}
 
 const installedFile = ".cogs/installed.json"
 
@@ -34,7 +40,37 @@ func loadInstalled(wsRoot string) installedManifest {
 	return m
 }
 
-// MergeInstalled overlays .cogs/installed.json onto the shipped workspace manifest.
+// MergeInstalledFromState overlays apps from .cogs/state.db onto the workspace manifest.
+func MergeInstalledFromState(wsRoot string, base Root) Root {
+	st, err := openStateStore(wsRoot)
+	if err == nil && st != nil {
+		defer st.Close()
+		views, err := st.ListApps()
+		if err == nil {
+			for _, v := range views {
+				if !v.Present || v.AppPath == "" {
+					continue
+				}
+				base = mergeOneApp(base, App{Name: v.ID, Path: v.AppPath, Description: "Managed by CoGS"})
+			}
+			return base
+		}
+	}
+	return MergeInstalled(wsRoot, base)
+}
+
+func mergeOneApp(base Root, a App) Root {
+	for i, existing := range base.Apps {
+		if existing.Name == a.Name {
+			base.Apps[i] = a
+			return base
+		}
+	}
+	base.Apps = append(base.Apps, a)
+	return base
+}
+
+// MergeInstalled overlays legacy .cogs/installed.json (import fallback).
 func MergeInstalled(wsRoot string, base Root) Root {
 	inst := loadInstalled(wsRoot)
 	if len(inst.Apps) == 0 {

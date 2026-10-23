@@ -12,8 +12,8 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/boot"
-	"github.com/irgipaulius/cogs/pkg/gowork"
-	"github.com/irgipaulius/cogs/pkg/provision"
+	"github.com/irgipaulius/cogs/pkg/reconcile"
+	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -70,6 +70,32 @@ func upPIDPath(root string) string {
 	return filepath.Join(root, ".cogs", "run", "up.pid")
 }
 
+func upLogPath(root string) string {
+	return filepath.Join(root, ".cogs", "run", "up.log")
+}
+
+func rotateUpLog(root string) {
+	const maxBytes = 2 << 20
+	p := upLogPath(root)
+	st, err := os.Stat(p)
+	if err != nil || st.Size() < maxBytes {
+		return
+	}
+	for i := 2; i >= 0; i-- {
+		src := p
+		if i > 0 {
+			src = fmt.Sprintf("%s.%d", p, i)
+		}
+		dst := fmt.Sprintf("%s.%d", p, i+1)
+		if i == 2 {
+			_ = os.Remove(dst)
+		}
+		if _, err := os.Stat(src); err == nil {
+			_ = os.Rename(src, dst)
+		}
+	}
+}
+
 func daemonizeUp(root string) error {
 	if pid, ok := appRunningPID(upPIDPath(root)); ok {
 		ux.Info(fmt.Sprintf("cogs up already running pid %d", pid))
@@ -82,10 +108,11 @@ func daemonizeUp(root string) error {
 	if err != nil {
 		return err
 	}
-	logPath := filepath.Join(root, ".cogs", "run", "up.log")
+	logPath := upLogPath(root)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return err
 	}
+	rotateUpLog(root)
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -116,20 +143,73 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 		return err
 	}
 	boot.LoadUpEnvIntoProcess(root)
-	if err := gowork.EnsureOverlayHealthy(root); err != nil {
-		ux.Warn("go.work overlay: " + err.Error())
-	}
+	rotateUpLog(root)
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
 	defer removePIDFileIfOwn(upPIDPath(root), os.Getpid())
+
+	var st *state.Store
+	var rec *reconcile.Manager
+	if s, err := state.Open(root); err == nil {
+		st = s
+		rec = reconcile.NewManager(st)
+		defer st.Close()
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	tick := time.NewTicker(5 * time.Second)
+	reconcileTick := time.NewTicker(3 * time.Minute)
 	defer tick.Stop()
+	defer reconcileTick.Stop()
 
 	supervise := func(quiet bool) {
 		reapChildren()
 		ensureSupervisorRunning(root)
+		appDirs := map[string]string{}
+		for _, a := range ws.Apps {
+			appDirs[a.Name] = filepath.Join(root, a.Path)
+		}
+		if st != nil {
+			views, err := st.ListApps()
+			if err == nil {
+				for _, v := range views {
+					if !v.Present {
+						continue
+					}
+					dir := appDirs[v.ID]
+					if v.AppPath != "" {
+						dir = filepath.Join(root, filepath.FromSlash(v.AppPath))
+					}
+					if dir == "" {
+						if !v.Converged && rec != nil {
+							rec.Enqueue(v.ID, reconcile.Options{})
+						}
+						continue
+					}
+					if _, err := os.Stat(filepath.Join(dir, "cogs.app.toml")); err != nil {
+						if _, err2 := os.Stat(filepath.Join(dir, "cogs.launch.json")); err2 != nil {
+							continue
+						}
+					}
+					if err := ensureReleaseRunningQuiet(dir); err != nil {
+						upGate.recordFailure(v.ID, err.Error())
+						if !quiet && upGate.shouldLog(v.ID, err.Error()) {
+							ux.Warn(v.ID + ": " + err.Error())
+						}
+					}
+					if !v.Converged && rec != nil {
+						rec.Enqueue(v.ID, reconcile.Options{})
+					}
+					if noTunnel {
+						continue
+					}
+					if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
+						upGate.recordFailure(v.ID, err.Error())
+					}
+				}
+				return
+			}
+		}
 		for _, a := range ws.Apps {
 			dir := filepath.Join(root, a.Path)
 			if _, err := os.Stat(filepath.Join(dir, "cogs.launch.json")); err != nil {
@@ -137,33 +217,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 					continue
 				}
 			}
-			pst := provision.Assess(root, a.Name, dir)
-			if ok, _ := upGate.allow(a.Name, pst); !ok {
-				if !quiet && upGate.mayLog(a.Name) {
-					ux.Warn(a.Name + ": not provisioned — skipping (" + strings.Join(pst.Reasons, "; ") + ")")
-				}
-				continue
-			}
-			healthURL := appHealthURL(dir)
-			if _, ok := appRunning(dir); ok {
-				if healthURL != "" && !appInHealthGrace(dir) && !probeAppHealth(healthURL) {
-					stopApp(dir)
-					if err := ensureAppRunningQuiet(dir); err != nil {
-						upGate.recordFailure(a.Name, err.Error())
-						if !quiet {
-							ux.Warn(a.Name + ": " + err.Error())
-						}
-					}
-				}
-				if noTunnel {
-					continue
-				}
-				if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
-					upGate.recordFailure(a.Name, err.Error())
-				}
-				continue
-			}
-			if err := ensureAppRunningQuiet(dir); err != nil {
+			if err := ensureReleaseRunningQuiet(dir); err != nil {
 				upGate.recordFailure(a.Name, err.Error())
 				if !quiet {
 					ux.Warn(a.Name + ": " + err.Error())
@@ -188,6 +242,15 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 		case <-tick.C:
 			supervise(true)
 			pullDeployQueueOnce(root, ws)
+		case <-reconcileTick.C:
+			if st != nil && rec != nil {
+				views, _ := st.ListApps()
+				for _, v := range views {
+					if v.Present && !v.Converged {
+						rec.Enqueue(v.ID, reconcile.Options{})
+					}
+				}
+			}
 		}
 	}
 }
@@ -248,8 +311,6 @@ func writeBootScript(root string) error {
 	return boot.Write(root, bin)
 }
 
-// removePIDFileIfOwn deletes pidPath only while it still names pid, so an
-// exiting cogs up never deletes the pidfile of the instance that replaced it.
 func removePIDFileIfOwn(pidPath string, pid int) {
 	b, err := os.ReadFile(pidPath)
 	if err != nil {

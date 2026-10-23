@@ -9,8 +9,12 @@ import (
 	"sync"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/cfclient"
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/cfqueue"
 	"github.com/irgipaulius/cogs/pkg/deploy"
+	"github.com/irgipaulius/cogs/pkg/reconcile"
+	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -29,12 +33,14 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 	if queueID == "" {
 		return
 	}
-	token, err := cfTokenQueue(root)
+	cf := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
+	ctx := context.Background()
+	token, err := cf.Token(ctx, cftoken.ScopeQueue)
 	if err != nil {
 		logQueuePullErr("queue pull token: " + err.Error())
 		return
 	}
-	accountID, err := cloudflareAccountID()
+	accountID, err := cf.AccountID(ctx)
 	if err != nil {
 		logQueuePullErr("queue pull account: " + err.Error())
 		return
@@ -64,7 +70,11 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 		ctx := context.Background()
 		switch {
 		case strings.Contains(ev.Type, "build.succeeded"):
-			if _, err := deploy.RecordBuildSuccess(ctx, root, appID, ev.CommitHash); err != nil {
+			if st, err := state.Open(root); err == nil {
+				mgr := reconcile.NewManager(st)
+				mgr.Enqueue(appID, reconcile.Options{Commit: ev.CommitHash})
+				log.Printf("queue: %s reconcile queued after Workers build %s", appID, ev.CommitHash)
+			} else if _, err := deploy.RecordBuildSuccess(ctx, root, appID, ev.CommitHash); err != nil {
 				log.Printf("queue: %s redeploy after build failed: %v", appID, err)
 			} else {
 				log.Printf("queue: %s redeployed after Workers build %s", appID, ev.CommitHash)

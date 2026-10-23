@@ -18,7 +18,8 @@ import (
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/cockpit"
 	"github.com/irgipaulius/cogs/pkg/config"
-	"github.com/irgipaulius/cogs/pkg/installjob"
+	"github.com/irgipaulius/cogs/pkg/reconcile"
+	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/supervisor"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -104,8 +105,10 @@ func serve(envFile string) error {
 		SecureCookie:  strings.HasPrefix(cfg.PublicAPIURL, "https://"),
 	}
 	if wsRoot != "" {
-		srv.Installs = installjob.NewManager(wsRoot)
-		srv.Installs.ResumePending()
+		if st, err := state.Open(wsRoot); err == nil {
+			srv.StateDB = st
+			srv.Reconciler = reconcile.NewManager(st)
+		}
 	}
 	srv.Handler(mux, ui.Handler())
 	tel.RegisterWellKnown(mux)

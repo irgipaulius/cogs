@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 )
 
 type zoneEntry struct {
@@ -143,24 +144,7 @@ func fetchCloudflareZones() ([]zoneEntry, error) {
 }
 
 func wranglerOAuthToken() (string, error) {
-	path, err := wranglerConfigPath()
-	if err != nil {
-		return "", err
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read wrangler config: %w", err)
-	}
-	re := regexp.MustCompile(`(?m)^oauth_token\s*=\s*"([^"]+)"`)
-	m := re.FindSubmatch(b)
-	if len(m) < 2 {
-		re2 := regexp.MustCompile(`(?m)^api_token\s*=\s*"([^"]+)"`)
-		m = re2.FindSubmatch(b)
-	}
-	if len(m) < 2 {
-		return "", fmt.Errorf("no oauth_token in %s; run wrangler login", path)
-	}
-	return string(m[1]), nil
+	return cftoken.WranglerOAuthToken()
 }
 
 func wranglerConfigPath() (string, error) {

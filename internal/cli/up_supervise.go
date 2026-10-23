@@ -3,15 +3,13 @@ package cli
 import (
 	"sync"
 	"time"
-
-	"github.com/irgipaulius/cogs/pkg/provision"
 )
 
 type upAppGate struct {
-	mu        sync.Mutex
-	failures  map[string]int
-	nextTry   map[string]time.Time
-	lastLog   map[string]string
+	mu       sync.Mutex
+	failures map[string]int
+	nextTry  map[string]time.Time
+	lastLog  map[string]string
 }
 
 var upGate upAppGate
@@ -20,28 +18,6 @@ func init() {
 	upGate.failures = map[string]int{}
 	upGate.nextTry = map[string]time.Time{}
 	upGate.lastLog = map[string]string{}
-}
-
-func (g *upAppGate) allow(appName string, st provision.State) (ok bool, reason string) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if st.Ready {
-		delete(g.failures, appName)
-		delete(g.nextTry, appName)
-		delete(g.lastLog, appName)
-		return true, ""
-	}
-	return false, st.Status
-}
-
-func (g *upAppGate) mayLog(appName string) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if t, ok := g.nextTry[appName]; ok && time.Now().Before(t) {
-		return false
-	}
-	g.nextTry[appName] = time.Now().Add(2 * time.Minute)
-	return true
 }
 
 func (g *upAppGate) recordFailure(appName, msg string) {
@@ -62,6 +38,9 @@ func (g *upAppGate) recordFailure(appName, msg string) {
 func (g *upAppGate) shouldLog(appName, msg string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if t, ok := g.nextTry[appName]; ok && time.Now().Before(t) {
+		return false
+	}
 	if g.lastLog[appName] == msg {
 		return false
 	}

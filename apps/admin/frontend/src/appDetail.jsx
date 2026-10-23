@@ -262,23 +262,22 @@ export function AppDetailView({
                   type="button"
                   className="btn btn-primary"
                   onClick={() =>
-                    api(`/api/apps/${encodeURIComponent(app)}/finish-install`, { method: 'POST' }).then(
-                      () => go('apps'),
+                    api(`/api/apps/${encodeURIComponent(app)}/reconcile`, { method: 'POST' }).catch((ex) =>
+                      alert(ex.message),
                     )
                   }
                 >
-                  Finish install
+                  Reconcile
                 </button>
               )}
               <button
                 type="button"
                 className="btn btn-ghost"
                 onClick={() => {
-                  if (!window.confirm(`Remove ${app} from CoGS? Clone can be kept.`)) return;
-                  api(`/api/apps/${encodeURIComponent(app)}/remove`, {
-                    method: 'POST',
-                    body: JSON.stringify({ remove_clone: false }),
-                  }).then(() => go('apps'));
+                  if (!window.confirm(`Remove ${app} from CoGS?`)) return;
+                  api(`/api/apps/${encodeURIComponent(app)}/remove`, { method: 'POST' })
+                    .then(() => go('apps'))
+                    .catch((ex) => alert(ex.message));
                 }}
               >
                 Remove app

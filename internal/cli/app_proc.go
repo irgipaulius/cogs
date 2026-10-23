@@ -12,7 +12,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
-	"github.com/irgipaulius/cogs/pkg/gowork"
+	"github.com/irgipaulius/cogs/pkg/buildenv"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/release"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -63,6 +63,55 @@ func startAppBackground(projectDir string) error {
 
 func ensureAppRunningQuiet(projectDir string) error {
 	return startAppProcess(projectDir, false, true)
+}
+
+// ensureReleaseRunningQuiet starts the current release binary only (no go build).
+func ensureReleaseRunningQuiet(projectDir string) error {
+	if _, ok := appRunning(projectDir); ok {
+		return nil
+	}
+	wsRoot, ws, err := workspace.FindRoot(projectDir)
+	if err != nil {
+		return err
+	}
+	appID := workspace.CanonicalID(wsRoot, ws, projectDir)
+	combined := false
+	if m, err := launch.Load(projectDir); err == nil {
+		combined = m.IsCombined()
+	}
+	bin, ok := release.CurrentBinary(wsRoot, appID, combined)
+	if !ok {
+		return nil
+	}
+	return startAppWithBinary(projectDir, bin)
+}
+
+func startAppWithBinary(projectDir, bin string) error {
+	stopApp(projectDir)
+	if err := os.MkdirAll(appRunDir(projectDir), 0o755); err != nil {
+		return err
+	}
+	logPath := appLogPath(projectDir)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(bin, "serve", "-env", ".env")
+	cmd.Dir = projectDir
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		logFile.Close()
+		return err
+	}
+	_ = logFile.Close()
+	if err := os.WriteFile(appPIDPath(projectDir), []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+	markAppHealthGrace(projectDir)
+	return nil
 }
 
 func startAppProcess(projectDir string, rebuild, quietIfRunning bool) error {
@@ -146,7 +195,7 @@ func buildAppBinary(projectDir string) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if wsRoot, _, err := workspace.FindRoot(projectDir); err == nil {
-		if env, e := gowork.BuildEnv(wsRoot, projectDir, os.Environ()); e == nil {
+		if env, e := buildenv.EnvForBuild(wsRoot, projectDir, os.Environ()); e == nil {
 			cmd.Env = env
 		}
 	}

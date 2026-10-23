@@ -8,8 +8,8 @@ import (
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/gitpublic"
 	"github.com/irgipaulius/cogs/pkg/hostcheck"
-	"github.com/irgipaulius/cogs/pkg/installjob"
-	"github.com/irgipaulius/cogs/pkg/provision"
+	"github.com/irgipaulius/cogs/pkg/reconcile"
+	"github.com/irgipaulius/cogs/pkg/state"
 )
 
 func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
@@ -17,8 +17,9 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		writeAPIError(w, http.StatusForbidden, "denied")
 		return
 	}
-	if s.WorkspaceRoot == "" {
-		writeAPIError(w, http.StatusServiceUnavailable, "workspace root not configured on admin server")
+	st, mgr, err := s.ensureState()
+	if err != nil {
+		writeAPIError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	var body struct {
@@ -34,54 +35,72 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		writeAPIError(w, http.StatusBadRequest, "bad json")
 		return
 	}
+	if body.ScaffoldOnly {
+		writeAPIError(w, http.StatusBadRequest, "scaffold_only not supported — use reconcile")
+		return
+	}
+	repo := gitpublic.NormalizeFullName(body.Repo)
+	if repo == "" {
+		writeAPIError(w, http.StatusBadRequest, "repo required")
+		return
+	}
+	appID := strings.TrimSpace(body.Name)
 	pageSub := strings.TrimSpace(body.PageSubdomain)
-	pageApex := body.PageApex
-	if pageApex {
+	if body.PageApex {
 		pageSub = ""
 	}
+	zone := strings.TrimSpace(body.Zone)
 	if err := hostcheck.ValidateSubdomain(pageSub); err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	zone := strings.TrimSpace(body.Zone)
-	skipApp := strings.TrimSpace(body.Name)
 	if zone != "" {
-		if conflicts, err := hostcheck.FindHostConflicts(s.WorkspaceRoot, pageSub, zone, skipApp); err != nil {
+		if conflicts, err := hostcheck.FindHostConflicts(s.WorkspaceRoot, pageSub, zone, appID); err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
 		} else if len(conflicts) > 0 {
 			writeAPIError(w, http.StatusConflict, conflicts[0])
 			return
 		}
-	}
-	if body.Repo != "" {
-		if existing := provision.InstalledByRepo(s.WorkspaceRoot, gitpublic.NormalizeFullName(body.Repo)); existing != "" && existing != skipApp {
-			writeAPIError(w, http.StatusConflict, "repository already installed as "+existing)
+		if err := st.CheckHostnames(appID, pageSub, "", zone); err != nil {
+			writeAPIError(w, http.StatusConflict, err.Error())
 			return
 		}
 	}
-
-	mgr := s.ensureInstalls()
-	req := installjob.Request{
-		RepoFull:      gitpublic.NormalizeFullName(body.Repo),
-		AppName:       strings.TrimSpace(body.Name),
-		DeployMode:    body.DeployMode,
-		PageSubdomain: pageSub,
-		PageApex:      pageApex,
-		Zone:          strings.TrimSpace(body.Zone),
-		ScaffoldOnly:  body.ScaffoldOnly,
+	if existing, _ := st.AppByRepo(repo); existing != "" && existing != appID {
+		writeAPIError(w, http.StatusConflict, "repository already installed as "+existing)
+		return
 	}
-	job, err := mgr.Create(r.Context(), req)
-	if err != nil {
+	if appID == "" {
+		appID = repoBaseName(repo)
+	}
+	mode := strings.TrimSpace(body.DeployMode)
+	if mode == "" {
+		mode = "push"
+	}
+	d := state.AppDesired{
+		ID:            appID,
+		Present:       true,
+		Repo:          repo,
+		Branch:        "main",
+		DeployMode:    mode,
+		Zone:          zone,
+		PageSubdomain: pageSub,
+	}
+	if err := st.SetDesired(d); err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	mgr.Enqueue(appID, reconcile.Options{})
 	if s.Store != nil {
-		_ = s.Store.WriteAudit(r.Context(), user, "install_start", job.ID+": "+req.RepoFull)
+		_ = s.Store.WriteAudit(r.Context(), user, "install_start", appID+": "+repo)
 	}
-	writeJSON(w, map[string]any{
-		"install_id": job.ID,
-		"app_name":   job.AppName,
-		"status":     job.Status,
-	})
+	writeJSON(w, map[string]any{"app_name": appID, "status": "queued"})
+}
+
+func repoBaseName(repo string) string {
+	if i := strings.LastIndex(repo, "/"); i >= 0 {
+		return repo[i+1:]
+	}
+	return repo
 }

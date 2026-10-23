@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/cfclient"
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/launch"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 type tunnelListResponse struct {
@@ -43,12 +47,22 @@ type tunnelConfigPut struct {
 }
 
 // ensureTunnelIngress sets hostname → local service on a remotely-managed tunnel (no dashboard).
+func cfClientForProject(projectDir string) *cfclient.Client {
+	c := &cfclient.Client{OAuth: wranglerOAuthToken}
+	if root, _, err := workspace.FindRoot(projectDir); err == nil {
+		c.WSRoot = root
+	}
+	return c
+}
+
 func ensureTunnelIngress(projectDir, tunnelName, hostname, localService string) error {
-	accountID, err := cloudflareAccountID()
+	c := cfClientForProject(projectDir)
+	ctx := context.Background()
+	accountID, err := c.AccountID(ctx)
 	if err != nil {
 		return err
 	}
-	token, err := cfTokenTunnel()
+	token, err := c.Token(ctx, cftoken.ScopeAPI)
 	if err != nil {
 		return err
 	}
@@ -98,15 +112,12 @@ func ensureTunnelIngress(projectDir, tunnelName, hostname, localService string) 
 }
 
 func cloudflareAccountID() (string, error) {
-	whoami, err := wranglerCapture("whoami", "--json")
-	if err != nil {
-		return "", err
+	wd, _ := os.Getwd()
+	c := &cfclient.Client{OAuth: wranglerOAuthToken}
+	if root, _, err := workspace.FindRoot(wd); err == nil {
+		c.WSRoot = root
 	}
-	var w whoamiJSON
-	if err := json.Unmarshal([]byte(whoami), &w); err != nil || len(w.Accounts) == 0 {
-		return "", fmt.Errorf("account id from whoami")
-	}
-	return w.Accounts[0].ID, nil
+	return c.AccountID(context.Background())
 }
 
 func findTunnelID(accountID, token, name string) (string, error) {
@@ -296,19 +307,21 @@ func apiHostFromProject(projectDir string, m launch.Manifest) (string, error) {
 }
 
 func ensureTunnelDNS(projectDir, tunnelName, fqdn string) error {
-	dnsToken, err := cfTokenDNS(projectDir, zoneNameFromHost(fqdn))
+	c := cfClientForProject(projectDir)
+	ctx := context.Background()
+	dnsToken, err := c.Token(ctx, cftoken.ScopeDNS)
 	if err != nil {
 		return err
 	}
-	tunnelToken, err := cfTokenTunnel()
+	apiToken, err := c.Token(ctx, cftoken.ScopeAPI)
 	if err != nil {
 		return err
 	}
-	accountID, err := cloudflareAccountID()
+	accountID, err := c.AccountID(ctx)
 	if err != nil {
 		return err
 	}
-	tunnelID, err := findTunnelID(accountID, tunnelToken, tunnelName)
+	tunnelID, err := findTunnelID(accountID, apiToken, tunnelName)
 	if err != nil {
 		return err
 	}
