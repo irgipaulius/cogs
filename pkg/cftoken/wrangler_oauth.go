@@ -25,6 +25,16 @@ var oauthTokenURL = "https://dash.cloudflare.com/oauth2/token"
 
 var wranglerRefreshMu sync.Mutex
 var loggedConfigPath sync.Once
+var wranglerNow = func() time.Time { return time.Now().UTC() }
+
+// SetWranglerNowForTests replaces the clock used for OAuth expiry checks.
+func SetWranglerNowForTests(fn func() time.Time) {
+	if fn == nil {
+		wranglerNow = func() time.Time { return time.Now().UTC() }
+		return
+	}
+	wranglerNow = fn
+}
 
 type wranglerCreds struct {
 	Path           string
@@ -88,7 +98,7 @@ func (c wranglerCreds) needsRefresh() bool {
 	if !c.HasExpiration {
 		return false
 	}
-	return time.Now().UTC().After(c.Expiration.Add(-2 * time.Minute))
+	return wranglerNow().After(c.Expiration.Add(-2 * time.Minute))
 }
 
 func readWranglerCreds(path string) (wranglerCreds, error) {
@@ -161,7 +171,7 @@ func refreshWranglerOAuth(path string) error {
 	if tok.AccessToken == "" {
 		return fmt.Errorf("empty access_token in refresh response")
 	}
-	exp := time.Now().UTC().Add(time.Duration(tok.ExpiresIn) * time.Second)
+	exp := wranglerNow().Add(time.Duration(tok.ExpiresIn) * time.Second)
 	if err := patchWranglerConfig(path, tok.AccessToken, tok.RefreshToken, exp); err != nil {
 		return err
 	}
