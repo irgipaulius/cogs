@@ -11,6 +11,11 @@ import (
 	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
 
+// WranglerConfigPath returns wrangler default.toml on this host.
+func WranglerConfigPath() (string, error) {
+	return wranglerConfigPath()
+}
+
 // WranglerOAuthToken reads the OAuth token from wrangler's config on the host.
 func WranglerOAuthToken() (string, error) {
 	path, err := wranglerConfigPath()

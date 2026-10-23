@@ -35,6 +35,22 @@ func (g *upAppGate) recordFailure(appName, msg string) {
 	}
 }
 
+func (g *upAppGate) mayRetry(appName string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if t, ok := g.nextTry[appName]; ok && time.Now().Before(t) {
+		return false
+	}
+	return true
+}
+
+func (g *upAppGate) recordAuthFailure(appName, msg string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.nextTry[appName] = time.Now().Add(5 * time.Minute)
+	g.lastLog[appName] = msg
+}
+
 func (g *upAppGate) shouldLog(appName, msg string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -98,7 +98,7 @@ Run both as the user that starts **admin** and **`cogs up`**. Private repos: the
 **Install flow (default):**
 
 1. **`POST /api/apps`** writes desired state to **`.cogs/state.db`** and enqueues **reconcile**.
-2. Reconcile stages: source → validate → build workspace → secrets → Cloudflare (`cogs launch -y --no-serve`) → build release → migrate → activate → GC.
+2. Reconcile stages: source → validate → build workspace → secrets → cf_resources → tunnel → worker → dns → build release → migrate → activate → GC.
 3. Watch progress on **Apps** via **`GET /api/reconcile/stream`** (SSE).
 
 CLI equivalent: register app per [deploy.md](deploy.md), then **`cogs launch <app> -y`** or trigger **`POST /api/apps/{name}/reconcile`**.

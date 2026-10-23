@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irgipaulius/cogs/pkg/cfclient"
+	"github.com/irgipaulius/cogs/pkg/cftoken"
+	"github.com/irgipaulius/cogs/pkg/hostenv"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
@@ -55,6 +59,10 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 			return fmt.Errorf("tunnel name required (or run from a project with cogs.launch.json)")
 		}
 	}
+	key := "tunnel:" + name
+	if !upGate.mayRetry(key) {
+		return nil
+	}
 	if pid, running := tunnelRunning(projectDir, name); running {
 		if !quiet {
 			fmt.Printf("Tunnel %q already running (pid %d)\n", name, pid)
@@ -63,6 +71,14 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 	}
 	if holder, pid, held := tunnelHeldByOtherApp(projectDir, name); held {
 		return fmt.Errorf("tunnel %q is already connected by app %q (pid %d) — each app needs its own tunnel_name in cogs.launch.json", name, holder, pid)
+	}
+	root, _, _ := workspace.FindRoot(projectDir)
+	c := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
+	ctx := context.Background()
+	tok, err := c.Token(ctx, cftoken.ScopeAPI)
+	if err != nil {
+		upGate.recordAuthFailure(key, err.Error())
+		return fmt.Errorf("Cloudflare auth missing: %w", err)
 	}
 	if err := os.MkdirAll(tunnelRunDir(projectDir), 0o755); err != nil {
 		return err
@@ -77,24 +93,27 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 		logFile.Close()
 		return err
 	}
+	cmd.Env = append(hostenv.CLIEnv(root), "CLOUDFLARE_API_TOKEN="+tok)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
+		upGate.recordFailure(key, err.Error())
 		return err
 	}
-	// Parent can close; child keeps writing
 	_ = logFile.Close()
 	pidPath := tunnelPIDPath(projectDir, name)
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
 		_ = cmd.Process.Kill()
 		return err
 	}
-	fmt.Printf("Tunnel %q started in background (pid %d)\n", name, cmd.Process.Pid)
-	fmt.Printf("  log: %s\n", logPath)
-	fmt.Printf("  stop: cogs tunnel stop %q --dir %s\n", name, projectDir)
+	if !quiet {
+		fmt.Printf("Tunnel %q started in background (pid %d)\n", name, cmd.Process.Pid)
+		fmt.Printf("  log: %s\n", logPath)
+		fmt.Printf("  stop: cogs tunnel stop %q --dir %s\n", name, projectDir)
+	}
 	return nil
 }
 
@@ -193,10 +212,18 @@ func tunnelRunForeground(name string) error {
 	if name == "" {
 		return fmt.Errorf("usage: cogs tunnel run <name>")
 	}
+	wd, _ := os.Getwd()
+	root, _, _ := workspace.FindRoot(wd)
+	c := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
+	tok, err := c.Token(context.Background(), cftoken.ScopeAPI)
+	if err != nil {
+		return err
+	}
 	cmd, err := wranglerCmd("tunnel", "run", name)
 	if err != nil {
 		return err
 	}
+	cmd.Env = append(hostenv.CLIEnv(root), "CLOUDFLARE_API_TOKEN="+tok)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

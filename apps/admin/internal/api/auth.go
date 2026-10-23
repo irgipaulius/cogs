@@ -13,6 +13,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/gitpublic"
 	"github.com/irgipaulius/cogs/pkg/hostsetup"
+	"github.com/irgipaulius/cogs/pkg/cfclient"
 	"github.com/irgipaulius/cogs/pkg/wranglercli"
 )
 
@@ -30,9 +31,24 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request, user *
 	}
 	gh, _ := ghcli.Status(ctx)
 	cf, _ := wranglercli.Status(ctx)
+	cfAuth := cfclient.CloudflareAuthStatus(ctx, s.WorkspaceRoot)
+	cfMap := map[string]any{
+		"installed":    cf.Installed,
+		"logged_in":    cf.LoggedIn,
+		"email":        cf.Email,
+		"account_id":   cf.AccountID,
+		"account_name": cf.Account,
+		"api_token_ok": cfAuth["api_token_ok"],
+	}
+	if msg, _ := cfAuth["message"].(string); msg != "" {
+		cfMap["auth_message"] = msg
+	}
+	if id, _ := cfAuth["account_id"].(string); id != "" {
+		cfMap["account_id"] = id
+	}
 	writeJSON(w, map[string]any{
 		"github":     gh,
-		"cloudflare": cf,
+		"cloudflare": cfMap,
 		"setup": map[string]any{
 			"cogs_home":               os.Getenv("COGS_HOME"),
 			"github_install_hint":     "cogs host setup  (or: pkg install gh / brew install gh)",

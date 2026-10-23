@@ -29,7 +29,7 @@ func init() {
 		}
 	}
 	if Version == "dev" {
-		if out, err := exec.Command("git", "describe", "--tags", "--always", "--dirty").Output(); err == nil {
+		if out, err := exec.Command("git", "describe", "--tags", "--always").Output(); err == nil {
 			if v := strings.TrimSpace(string(out)); v != "" {
 				Version = v
 			}

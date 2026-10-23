@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -74,28 +75,6 @@ func upLogPath(root string) string {
 	return filepath.Join(root, ".cogs", "run", "up.log")
 }
 
-func rotateUpLog(root string) {
-	const maxBytes = 2 << 20
-	p := upLogPath(root)
-	st, err := os.Stat(p)
-	if err != nil || st.Size() < maxBytes {
-		return
-	}
-	for i := 2; i >= 0; i-- {
-		src := p
-		if i > 0 {
-			src = fmt.Sprintf("%s.%d", p, i)
-		}
-		dst := fmt.Sprintf("%s.%d", p, i+1)
-		if i == 2 {
-			_ = os.Remove(dst)
-		}
-		if _, err := os.Stat(src); err == nil {
-			_ = os.Rename(src, dst)
-		}
-	}
-}
-
 func daemonizeUp(root string) error {
 	if pid, ok := appRunningPID(upPIDPath(root)); ok {
 		ux.Info(fmt.Sprintf("cogs up already running pid %d", pid))
@@ -112,21 +91,12 @@ func daemonizeUp(root string) error {
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return err
 	}
-	rotateUpLog(root)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
 	cmd := exec.Command(bin, "up", "--foreground")
 	cmd.Dir = root
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
 		return err
 	}
-	_ = logFile.Close()
 	if err := os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o644); err != nil {
 		_ = cmd.Process.Kill()
 		return err
@@ -143,7 +113,8 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 		return err
 	}
 	boot.LoadUpEnvIntoProcess(root)
-	rotateUpLog(root)
+	attachUpLog(root)
+	defer closeUpLog()
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
 	defer removePIDFileIfOwn(upPIDPath(root), os.Getpid())
 
@@ -164,71 +135,43 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 
 	supervise := func(quiet bool) {
 		reapChildren()
+		rotateUpLogInProcess(root)
 		ensureSupervisorRunning(root)
-		appDirs := map[string]string{}
-		for _, a := range ws.Apps {
-			appDirs[a.Name] = filepath.Join(root, a.Path)
-		}
-		if st != nil {
-			views, err := st.ListApps()
-			if err == nil {
-				for _, v := range views {
-					if !v.Present {
-						continue
-					}
-					dir := appDirs[v.ID]
-					if v.AppPath != "" {
-						dir = filepath.Join(root, filepath.FromSlash(v.AppPath))
-					}
-					if dir == "" {
-						if !v.Converged && rec != nil {
-							rec.Enqueue(v.ID, reconcile.Options{})
-						}
-						continue
-					}
-					if _, err := os.Stat(filepath.Join(dir, "cogs.app.toml")); err != nil {
-						if _, err2 := os.Stat(filepath.Join(dir, "cogs.launch.json")); err2 != nil {
-							continue
-						}
-					}
-					if err := ensureReleaseRunningQuiet(dir); err != nil {
-						upGate.recordFailure(v.ID, err.Error())
-						if !quiet && upGate.shouldLog(v.ID, err.Error()) {
-							ux.Warn(v.ID + ": " + err.Error())
-						}
-					}
-					if !v.Converged && rec != nil {
-						rec.Enqueue(v.ID, reconcile.Options{})
-					}
-					if noTunnel {
-						continue
-					}
-					if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
-						upGate.recordFailure(v.ID, err.Error())
-					}
-				}
-				return
-			}
-		}
 		for _, a := range ws.Apps {
 			dir := filepath.Join(root, a.Path)
-			if _, err := os.Stat(filepath.Join(dir, "cogs.launch.json")); err != nil {
-				if _, err2 := os.Stat(filepath.Join(dir, "cogs.app.toml")); err2 != nil {
-					continue
-				}
+			if !appDirLooksLikeApp(dir) {
+				continue
 			}
 			if err := ensureReleaseRunningQuiet(dir); err != nil {
 				upGate.recordFailure(a.Name, err.Error())
-				if !quiet {
+				if !quiet && upGate.shouldLog(a.Name, err.Error()) {
 					ux.Warn(a.Name + ": " + err.Error())
 				}
-				continue
 			}
 			if noTunnel {
 				continue
 			}
 			if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
-				upGate.recordFailure(a.Name, err.Error())
+				msg := err.Error()
+				if strings.Contains(msg, "Cloudflare auth") {
+					upGate.recordAuthFailure("tunnel:"+a.Name, msg)
+				} else {
+					upGate.recordFailure(a.Name, msg)
+				}
+				if !quiet && upGate.shouldLog(a.Name, msg) {
+					log.Print(a.Name + " tunnel: " + msg)
+				}
+			}
+		}
+		if st != nil && rec != nil {
+			views, err := st.ListApps()
+			if err == nil && len(views) == 0 && len(ws.Apps) > 0 {
+				log.Printf("state.db has 0 apps but workspace has %d — re-open state or run cogs doctor", len(ws.Apps))
+			}
+			for _, v := range views {
+				if v.Present && !v.Converged {
+					rec.Enqueue(v.ID, reconcile.Options{})
+				}
 			}
 		}
 	}
@@ -294,6 +237,16 @@ func appRunningPID(path string) (int, bool) {
 		return 0, false
 	}
 	return pid, true
+}
+
+func appDirLooksLikeApp(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, "cogs.app.toml")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(dir, "cogs.launch.json")); err == nil {
+		return true
+	}
+	return false
 }
 
 func bootScriptPath(root string) string {
