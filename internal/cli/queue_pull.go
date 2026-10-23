@@ -51,41 +51,56 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 		return
 	}
 	clearQueuePullErr()
-	var acks []string
+	st, err := state.Open(root)
+	if err != nil {
+		logQueuePullErr("queue pull state: " + err.Error())
+		return
+	}
+	defer st.Close()
+	match := func(ev cfqueue.BuildEvent) (string, string) {
+		return matchBuildEvent(root, ws, ev)
+	}
+	acks, enqueue := planQueueBuilds(root, st, msgs, match)
 	for _, msg := range msgs {
 		ev, ok := cfqueue.ParseBuildEvent(msg.Body)
 		if !ok {
-			acks = append(acks, msg.LeaseID)
+			continue
+		}
+		if !strings.Contains(ev.Type, "build.failed") {
 			continue
 		}
 		appID, branch := matchBuildEvent(root, ws, ev)
 		if appID == "" {
-			acks = append(acks, msg.LeaseID)
 			continue
 		}
 		if branch != "" && ev.Branch != "" && !strings.EqualFold(branch, ev.Branch) {
-			acks = append(acks, msg.LeaseID)
 			continue
 		}
-		ctx := context.Background()
-		switch {
-		case strings.Contains(ev.Type, "build.succeeded"):
-			if st, err := state.Open(root); err == nil {
-				mgr := reconcile.NewManager(st)
-				mgr.Enqueue(appID, reconcile.Options{Commit: ev.CommitHash})
-				log.Printf("queue: %s reconcile queued after Workers build %s", appID, ev.CommitHash)
-			} else if _, err := deploy.RecordBuildSuccess(ctx, root, appID, ev.CommitHash); err != nil {
-				log.Printf("queue: %s redeploy after build failed: %v", appID, err)
-			} else {
-				log.Printf("queue: %s redeployed after Workers build %s", appID, ev.CommitHash)
-			}
-		case strings.Contains(ev.Type, "build.failed"):
-			errMsg := ev.Error
-			if errMsg == "" {
-				errMsg = "Workers build failed"
-			}
-			_ = deploy.RecordBuildFailure(root, appID, ev.CommitHash, errMsg)
-			log.Printf("queue: %s Workers build failed: %s", appID, errMsg)
+		errMsg := ev.Error
+		if errMsg == "" {
+			errMsg = "Workers build failed"
+		}
+		_ = deploy.RecordBuildFailure(root, appID, ev.CommitHash, errMsg)
+		log.Printf("queue: %s Workers build failed: %s", appID, errMsg)
+		if msg.LeaseID != "" {
+			acks = append(acks, msg.LeaseID)
+		}
+	}
+	mgr := reconcile.NewManager(st)
+	for appID, commit := range enqueue {
+		mgr.Enqueue(appID, reconcile.Options{Commit: commit})
+		log.Printf("queue: %s reconcile queued after Workers build %s", appID, commit)
+	}
+	seen := map[string]struct{}{}
+	for _, id := range acks {
+		seen[id] = struct{}{}
+	}
+	for _, msg := range msgs {
+		if msg.LeaseID == "" {
+			continue
+		}
+		if _, ok := seen[msg.LeaseID]; ok {
+			continue
 		}
 		acks = append(acks, msg.LeaseID)
 	}
