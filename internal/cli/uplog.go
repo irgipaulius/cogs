@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const upLogMaxBytes = 2 << 20
@@ -20,6 +22,37 @@ func attachUpLog(root string) {
 	}
 	upLogWriter = f
 	log.SetOutput(upLogWriterFor(f))
+	writeUpLogStartMarker(f)
+}
+
+func writeUpLogStartMarker(f *os.File) {
+	if f == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(f, "cogs up start pid=%d at=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
+}
+
+func upLogBytesSinceCurrentRun(root string) []byte {
+	path := upLogPath(root)
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	marker := []byte("cogs up start pid=")
+	idx := bytesLastIndex(b, marker)
+	if idx < 0 {
+		return b
+	}
+	return b[idx:]
+}
+
+func bytesLastIndex(b, sep []byte) int {
+	for i := len(b) - len(sep); i >= 0; i-- {
+		if string(b[i:i+len(sep)]) == string(sep) {
+			return i
+		}
+	}
+	return -1
 }
 
 func upLogWriterFor(f *os.File) io.Writer {
@@ -59,6 +92,7 @@ func rotateUpLogInProcess(root string) {
 	}
 	upLogWriter = f
 	log.SetOutput(upLogWriterFor(f))
+	writeUpLogStartMarker(f)
 }
 
 func itoa(n int) string {

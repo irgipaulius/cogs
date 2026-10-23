@@ -6,6 +6,8 @@ fi
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=acceptance-lib.sh
+source "$SCRIPT_DIR/acceptance-lib.sh"
 ROOT="${COGS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 COOKIE="${COGS_ADMIN_COOKIE:-}"
 PASS=0
@@ -194,10 +196,11 @@ else
   skip "Test 9 — not a git checkout"
 fi
 
-# Test 10 — queue pull errors
+# Test 10 — queue pull errors (current cogs up run only)
 UPLOG="$ROOT/.cogs/run/up.log"
 if [[ -f "$UPLOG" ]]; then
-  if grep -E 'queue pull|queue ack|queue pull token|queue pull account' "$UPLOG" | grep -qiE 'error|401|403|fail|missing' >/dev/null 2>&1; then
+  uplog_slice=$(acceptance_up_log_since_start "$UPLOG")
+  if printf '%s' "$uplog_slice" | grep -E 'queue pull|queue ack|queue pull token|queue pull account' | grep -qiE 'error|401|403|fail|missing' >/dev/null 2>&1; then
     fail "Test 10 — queue pull errors in up.log"
   else
     pass "Test 10 — no queue-pull errors in up.log"
