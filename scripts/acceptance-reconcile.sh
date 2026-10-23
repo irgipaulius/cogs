@@ -104,7 +104,7 @@ curl_api() {
   curl "${args[@]}" "$ADMIN$path" "$@"
 }
 
-# Test 1 — remove + install rampocalypse (automated when COGS_ACCEPTANCE_FULL=1)
+# Test 1 — destructive rampocalypse remove/install; opt-in only (COGS_ACCEPTANCE_FULL=1).
 if [[ "${COGS_ACCEPTANCE_FULL:-}" == "1" && -n "$COOKIE" ]]; then
   body='{"repo":"irgipaulius/rampocalypse","name":"ram"}'
   code=$(curl_api POST /api/apps/ram/remove -d '{}' 2>/dev/null | tail -1 || echo "000")
