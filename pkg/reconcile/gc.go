@@ -110,29 +110,15 @@ func expandKeepSet(wsRoot, appID string, combined bool, shas []string) map[strin
 		if sha == "" {
 			continue
 		}
-		keep[sha] = true
 		if full := release.ResolveCommit(wsRoot, appID, sha); full != "" {
 			keep[full] = true
-		}
-	}
-	for _, disk := range release.ListDiskCommits(wsRoot, appID, combined) {
-		for sha := range keep {
-			if strings.HasPrefix(disk, sha) || strings.HasPrefix(sha, disk) {
-				keep[disk] = true
-			}
+		} else if release.BinaryExists(wsRoot, appID, sha, combined) {
+			keep[sha] = true
 		}
 	}
 	return keep
 }
 
 func keepReleaseSHA(keep map[string]bool, sha string) bool {
-	if keep[sha] {
-		return true
-	}
-	for k := range keep {
-		if strings.HasPrefix(sha, k) || strings.HasPrefix(k, sha) {
-			return true
-		}
-	}
-	return false
+	return keep[strings.TrimSpace(sha)]
 }

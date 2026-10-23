@@ -17,11 +17,14 @@ func enqueueMonorepoRebuildIfNeeded(root string, st *state.Store, rec *reconcile
 	if rec == nil || st == nil {
 		return
 	}
-	head := strings.TrimSpace(workspaceGitHead(root))
-	if head == "" {
-		head = strings.TrimSpace(version.Commit)
+	target := strings.TrimSpace(workspaceGitHead(root))
+	cliCommit := strings.TrimSpace(version.Commit)
+	if len(cliCommit) >= 7 {
+		if target == "" || !commitsEqual(target, cliCommit) {
+			target = cliCommit
+		}
 	}
-	if len(head) < 7 {
+	if len(target) < 7 {
 		return
 	}
 	for _, a := range ws.Apps {
@@ -34,14 +37,24 @@ func enqueueMonorepoRebuildIfNeeded(root string, st *state.Store, rec *reconcile
 				cur = resolved
 			}
 		}
-		if cur == head {
+		if commitsEqual(cur, target) {
 			continue
 		}
-		if _, _, ok := release.BinaryForCommit(root, a.Name, head, appCombined(root, a.Path)); ok && cur == head {
-			continue
-		}
-		rec.Enqueue(a.Name, reconcile.Options{Commit: head, ForceRebuild: true})
+		rec.Enqueue(a.Name, reconcile.Options{Commit: target, ForceRebuild: true})
 	}
+}
+
+func commitsEqual(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(a), strings.ToLower(b)) ||
+		strings.HasPrefix(strings.ToLower(b), strings.ToLower(a))
 }
 
 func workspaceGitHead(root string) string {

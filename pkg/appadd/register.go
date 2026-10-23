@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/apppath"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -20,6 +21,9 @@ func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode, gitRootRel strin
 	wsRoot, err = filepath.Abs(wsRoot)
 	if err != nil {
 		return "", err
+	}
+	if apppath.IsEphemeral(appDir) {
+		return "", fmt.Errorf("refusing to register ephemeral app dir %s", appDir)
 	}
 	if _, err := os.Stat(filepath.Join(appDir, appcfg.Filename)); err != nil {
 		return "", fmt.Errorf("missing %s in %s", appcfg.Filename, appDir)
@@ -69,12 +73,15 @@ func RegisterFromDir(wsRoot, name, appDir, gitRepo, deployMode, gitRootRel strin
 
 func hasGoMod(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, "go.mod"))
-	return err == nil
+	return err != nil
 }
 
 // PatchAppMeta updates cogs.app.toml before register (install overrides).
 // When pageApex is true, page_subdomain is cleared so the UI serves on the zone apex.
 func PatchAppMeta(appDir, gitRepo, deployMode, zone, pageSub string, pageApex bool) error {
+	if apppath.IsEphemeral(appDir) {
+		return fmt.Errorf("refusing to patch %s under build artifact path", appcfg.Filename)
+	}
 	if pageApex {
 		pageSub = ""
 	}
@@ -87,7 +94,8 @@ func patchGitMeta(appDir, gitRepo, deployMode, zone, pageSub string, pageApex bo
 	if err != nil {
 		return err
 	}
-	lines := strings.Split(string(b), "\n")
+	orig := string(b)
+	lines := strings.Split(orig, "\n")
 	if gitRepo = strings.TrimSpace(gitRepo); gitRepo != "" {
 		lines = setKey(lines, "git_repo", fmt.Sprintf("%q", gitRepo))
 	}
@@ -105,6 +113,9 @@ func patchGitMeta(appDir, gitRepo, deployMode, zone, pageSub string, pageApex bo
 	out := strings.Join(lines, "\n")
 	if !strings.HasSuffix(out, "\n") {
 		out += "\n"
+	}
+	if out == orig || out == orig+"\n" {
+		return nil
 	}
 	return os.WriteFile(path, []byte(out), 0o644)
 }

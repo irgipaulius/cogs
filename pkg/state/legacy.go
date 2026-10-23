@@ -37,6 +37,9 @@ func importLegacyOnce(s *Store) error {
 	}
 	needImport := count == 0 && len(ws.Apps) > 0
 	if len(ws.Apps) > 0 {
+		if err := repairAppPathsAndConfigs(s, ws); err != nil {
+			return fmt.Errorf("app path repair: %w", err)
+		}
 		if err := repairReleaseState(s, ws); err != nil {
 			return fmt.Errorf("release repair: %w", err)
 		}

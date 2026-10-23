@@ -33,7 +33,7 @@ func PullBatch(accountID, queueID, token string, batchSize int) ([]Message, erro
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("queue pull %d: %s", resp.StatusCode, string(body))
+		return nil, FormatPullError(resp.StatusCode, string(body))
 	}
 	var wrap struct {
 		Success bool `json:"success"`

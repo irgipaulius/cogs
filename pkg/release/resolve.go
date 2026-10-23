@@ -38,6 +38,11 @@ func ResolveCommit(wsRoot, appID, commit string) string {
 	return matches[0]
 }
 
+// BinaryExists reports whether the release binary exists for commit (after resolve).
+func BinaryExists(wsRoot, appID, commit string, combined bool) bool {
+	return binaryExists(wsRoot, appID, commit, combined)
+}
+
 func binaryExists(wsRoot, appID, commit string, combined bool) bool {
 	p := BinaryPath(wsRoot, appID, commit, combined)
 	st, err := os.Stat(p)

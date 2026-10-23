@@ -13,6 +13,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appadd"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/appinstall"
+	"github.com/irgipaulius/cogs/pkg/apppath"
 	"github.com/irgipaulius/cogs/pkg/cfprovision"
 	"github.com/irgipaulius/cogs/pkg/deploy"
 	"github.com/irgipaulius/cogs/pkg/gitconfig"
@@ -77,20 +78,13 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 	cfCfg := cfprovision.NewConfig(wsRoot, log)
 
 	if err := stage(st, runID, "source", log, func() error {
-		src, err := appinstall.MaterializeRepo(ctx, wsRoot, app.Repo)
+		var gitRel string
+		var err error
+		appDir, gitRel, err = appinstall.ResolveAppDir(ctx, wsRoot, app.ID, app.Repo)
 		if err != nil {
 			return err
 		}
-		cfgPath, err := appinstall.FindAppConfig(src)
-		if err != nil {
-			return err
-		}
-		appDir = filepath.Dir(cfgPath)
-		_ = gitconfig.EnsureSafeDirectory(ctx, wsRoot, src)
-		gitRel, _ := filepath.Rel(wsRoot, src)
-		if strings.HasPrefix(gitRel, "..") {
-			gitRel = ""
-		}
+		_ = gitconfig.EnsureSafeDirectory(ctx, wsRoot, wsRoot)
 		appRel, _ := filepath.Rel(wsRoot, appDir)
 		if strings.HasPrefix(appRel, "..") {
 			return fmt.Errorf("app dir outside workspace")
@@ -99,8 +93,10 @@ func runPipeline(ctx context.Context, st *state.Store, app state.AppView, runID 
 		d.Present = true
 		d.AppPath = filepath.ToSlash(appRel)
 		d.GitRoot = filepath.ToSlash(gitRel)
-		if err := appadd.PatchAppMeta(appDir, app.Repo, app.DeployMode, app.Zone, app.PageSubdomain, app.PageSubdomain == "" && app.Zone != ""); err != nil {
-			return err
+		if needsPatchAppMeta(app, appDir) {
+			if err := appadd.PatchAppMeta(appDir, app.Repo, app.DeployMode, app.Zone, app.PageSubdomain, app.PageSubdomain == "" && app.Zone != ""); err != nil {
+				return err
+			}
 		}
 		_, err = appadd.RegisterFromDir(wsRoot, app.ID, appDir, app.Repo, app.DeployMode, d.GitRoot)
 		if err != nil && !strings.Contains(err.Error(), "already exists") {
@@ -242,10 +238,27 @@ func stage(st *state.Store, runID, name string, log io.Writer, fn func() error) 
 
 func resolveAppDir(wsRoot string, app state.AppView) (string, error) {
 	if app.AppPath != "" {
-		return filepath.Join(wsRoot, filepath.FromSlash(app.AppPath)), nil
+		p := filepath.Join(wsRoot, filepath.FromSlash(app.AppPath))
+		if apppath.IsEphemeral(p) {
+			if dir, ok := appinstall.WorkspaceAppDir(wsRoot, app.ID); ok {
+				return dir, nil
+			}
+		} else if _, err := os.Stat(filepath.Join(p, appcfg.Filename)); err == nil {
+			return p, nil
+		}
 	}
-	if _, err := appcfg.Load(filepath.Join(wsRoot, "apps", app.ID)); err == nil {
-		return filepath.Join(wsRoot, "apps", app.ID), nil
+	if dir, ok := appinstall.WorkspaceAppDir(wsRoot, app.ID); ok {
+		return dir, nil
 	}
 	return "", fmt.Errorf("app path unknown for %s", app.ID)
+}
+
+func needsPatchAppMeta(app state.AppView, appDir string) bool {
+	if apppath.IsEphemeral(appDir) {
+		return false
+	}
+	return strings.TrimSpace(app.Repo) != "" ||
+		strings.TrimSpace(app.DeployMode) != "" ||
+		strings.TrimSpace(app.Zone) != "" ||
+		strings.TrimSpace(app.PageSubdomain) != ""
 }

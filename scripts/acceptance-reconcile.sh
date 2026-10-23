@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # CoGS reconcile acceptance — run on Cedevita after deploy from main.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 set -euo pipefail
 
 ROOT="${COGS_ROOT:-$(pwd)}"
@@ -121,9 +124,11 @@ if [[ -f "$ROOT/.cogs/state.db" ]]; then
   pass "Test 7 — state.db present for duplicate-repo checks"
 fi
 
-# Test 8 — hostname check
+# Test 8 — hostname check (401 without session is a failure)
 code=$(curl -sS -o /dev/null -w "%{http_code}" "$ADMIN/api/hostnames/check?subdomain=test&zone=example.com&skip_app=x" 2>/dev/null || echo "000")
-if [[ "$code" == "401" || "$code" == "403" || "$code" == "200" ]]; then
+if [[ "$code" == "401" ]]; then
+  fail "Test 8 — hostnames/check HTTP 401 (set COGS_ADMIN_COOKIE or fix auth)"
+elif [[ "$code" == "403" || "$code" == "200" ]]; then
   pass "Test 8 — hostnames/check HTTP $code"
 else
   fail "Test 8 — hostnames/check HTTP $code"
@@ -215,6 +220,20 @@ fi
 todo_api=$(grep -E '^COGS_PUBLIC_API_URL=' "$ROOT/apps/todo/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
 if [[ -n "$todo_api" ]]; then
   check_tunnel_host "todo-api" "$todo_api"
+fi
+gold_api=$(grep -E '^COGS_PUBLIC_API_URL=' "$ROOT/apps/goldilocks/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+if [[ -n "$gold_api" ]]; then
+  check_tunnel_host "goldilocks-api" "$gold_api"
+fi
+
+# Test 15 — state.db: no app stuck unconverged / last_error
+if [[ -f "$ROOT/.cogs/state.db" ]]; then
+  bad=$(sqlite3 "$ROOT/.cogs/state.db" "SELECT id FROM apps WHERE desired_present=1 AND (converged=0 OR (last_error IS NOT NULL AND last_error != ''));" 2>/dev/null || true)
+  if [[ -z "$bad" ]]; then
+    pass "Test 15 — all present apps converged without last_error"
+  else
+    fail "Test 15 — apps need reconcile: $(echo "$bad" | tr '\n' ' ')"
+  fi
 fi
 
 echo "===================================================="

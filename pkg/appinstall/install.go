@@ -13,6 +13,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/gitpublic"
+	"github.com/irgipaulius/cogs/pkg/apppath"
 	"github.com/irgipaulius/cogs/pkg/hostenv"
 )
 
@@ -41,7 +42,7 @@ func Install(ctx context.Context, opts Options) (name, appDir, detail string, er
 	if err != nil {
 		return "", "", "", err
 	}
-	cfgPath, err := FindAppConfig(srcRoot)
+	cfgPath, err := FindAppConfigForApp(srcRoot, strings.TrimSpace(opts.AppName))
 	if err != nil {
 		return "", "", "", err
 	}
@@ -142,28 +143,70 @@ func isGitCheckout(dir string) bool {
 	return exec.Command("git", "-C", dir, "rev-parse", "HEAD").Run() == nil
 }
 
-// FindAppConfig locates cogs.app.toml in a checkout.
+// FindAppConfig locates cogs.app.toml in a checkout (prefer apps/<name> when appName set).
 func FindAppConfig(root string) (string, error) {
+	return FindAppConfigForApp(root, "")
+}
+
+// FindAppConfigForApp finds cogs.app.toml, skipping .cogs/worktrees and matching appName when set.
+func FindAppConfigForApp(root, appName string) (string, error) {
+	appName = strings.TrimSpace(appName)
+	if appName != "" {
+		if p := filepath.Join(root, "apps", appName, appcfg.Filename); fileExists(p) {
+			return p, nil
+		}
+	}
 	if p := filepath.Join(root, appcfg.Filename); fileExists(p) {
 		return p, nil
 	}
-	var found string
+	var matches []string
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if skipWalkDir(d.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if filepath.Base(path) != appcfg.Filename {
 			return nil
 		}
-		if strings.Contains(path, string(filepath.Separator)+"apps"+string(filepath.Separator)) {
-			if found == "" {
-				found = path
-			}
+		if apppath.IsEphemeral(filepath.Dir(path)) {
+			return nil
 		}
+		if !strings.Contains(filepath.ToSlash(path), "/apps/") {
+			return nil
+		}
+		if appName != "" {
+			if cfg, err := appcfg.Load(filepath.Dir(path)); err == nil && cfg.Name == appName {
+				matches = append(matches, path)
+				return nil
+			}
+			if filepath.Base(filepath.Dir(path)) == appName {
+				matches = append(matches, path)
+			}
+			return nil
+		}
+		matches = append(matches, path)
 		return nil
 	})
-	if found != "" {
-		return found, nil
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if appName != "" && len(matches) > 0 {
+		for _, m := range matches {
+			if filepath.Base(filepath.Dir(m)) == appName {
+				return m, nil
+			}
+		}
+	}
+	if appName == "" && len(matches) > 0 {
+		return matches[0], nil
+	}
+	if appName != "" {
+		return "", fmt.Errorf("no %s for app %q under %s", appcfg.Filename, appName, root)
 	}
 	return "", fmt.Errorf("no %s found in %s", appcfg.Filename, root)
 }

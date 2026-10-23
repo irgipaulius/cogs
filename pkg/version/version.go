@@ -40,7 +40,14 @@ func init() {
 			Commit = strings.TrimSpace(string(out))
 		}
 	}
-	Version = strings.TrimSuffix(Version, "-dirty")
+	if strings.Contains(Version, "dirty") && gitOnlyUntrackedDirty() {
+		Version = strings.TrimSuffix(Version, "-dirty")
+	}
+}
+
+func gitOnlyUntrackedDirty() bool {
+	tracked, _ := exec.Command("git", "status", "--porcelain", "--untracked-files=no").Output()
+	return len(strings.TrimSpace(string(tracked))) == 0
 }
 
 // String is the user-facing version line for `cogs version`.
