@@ -13,6 +13,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/boot"
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/reconcile"
 	"github.com/irgipaulius/cogs/pkg/state"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -114,6 +115,8 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	}
 	gcWranglerLogs(root)
 	boot.LoadUpEnvIntoProcess(root)
+	_ = os.Setenv("COGS_WORKSPACE_ROOT", root)
+	cftoken.MaintainWranglerOAuth()
 	attachUpLog(root)
 	defer closeUpLog()
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
@@ -131,8 +134,10 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	tick := time.NewTicker(5 * time.Second)
 	reconcileTick := time.NewTicker(3 * time.Minute)
+	oauthTick := time.NewTicker(45 * time.Minute)
 	defer tick.Stop()
 	defer reconcileTick.Stop()
+	defer oauthTick.Stop()
 
 	stopLegacyLeaseWatchers(root, ws)
 	enqueueMonorepoRebuildIfNeeded(root, st, rec, ws)
@@ -201,6 +206,8 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 					}
 				}
 			}
+		case <-oauthTick.C:
+			cftoken.MaintainWranglerOAuth()
 		}
 	}
 }
