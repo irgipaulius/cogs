@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/irgipaulius/cogs/pkg/appbuild"
 )
 
 const defaultFrontendDir = "frontend"
@@ -39,6 +41,7 @@ func buildLaunchFrontend(projectDir string, quick bool) error {
 func npm(dir string, args ...string) error {
 	cmd := exec.Command("npm", args...)
 	cmd.Dir = dir
+	cmd.Env = appbuild.NpmEnv(nil)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

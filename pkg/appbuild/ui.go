@@ -48,7 +48,7 @@ func nodeModulesMissing(dir string) bool {
 func npm(dir string, extraEnv []string, args ...string) error {
 	cmd := exec.Command("npm", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), extraEnv...)
+	cmd.Env = NpmEnv(extraEnv)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
