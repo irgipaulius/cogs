@@ -12,6 +12,31 @@ PASS=0
 FAIL=0
 SKIP=0
 
+ensure_acceptance_cookie() {
+  if [[ -n "$COOKIE" ]]; then
+    return 0
+  fi
+  local user pass
+  user="${COGS_ACCEPTANCE_ADMIN_USER:-}"
+  pass="${COGS_ACCEPTANCE_ADMIN_PASSWORD:-}"
+  if [[ -z "$user" || -z "$pass" ]]; then
+    return 1
+  fi
+  local jar
+  jar="$(mktemp)"
+  local code
+  code=$(curl -sS -o /dev/null -w "%{http_code}" -c "$jar" -X POST "$ADMIN/api/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"${user}\",\"password\":\"${pass}\"}" 2>/dev/null || echo "000")
+  if [[ "$code" != "200" ]]; then
+    rm -f "$jar"
+    return 1
+  fi
+  COOKIE="cogs_admin_session=$(awk '$6=="cogs_admin_session"{print $7}' "$jar" | tail -1)"
+  rm -f "$jar"
+  [[ -n "$COOKIE" ]]
+}
+
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
@@ -58,6 +83,10 @@ ADMIN="$(admin_local_url)"
 PUBLIC_ADMIN="$(admin_public_url)"
 echo "CoGS acceptance-reconcile (ROOT=$ROOT ADMIN=$ADMIN PUBLIC=${PUBLIC_ADMIN:-none})"
 echo "===================================================="
+
+if ! ensure_acceptance_cookie; then
+  fail "acceptance auth — set COGS_ADMIN_COOKIE or COGS_ACCEPTANCE_ADMIN_USER + COGS_ACCEPTANCE_ADMIN_PASSWORD"
+fi
 
 curl_api() {
   local method=$1 path=$2
@@ -116,9 +145,28 @@ else
   fail "Test 3 — set COGS_ADMIN_PUBLIC_URL or COGS_PUBLIC_PAGE_ORIGIN in apps/admin/.env"
 fi
 
-skip "Test 4 — goldilocks breaking push / last_good (manual)"
-skip "Test 5 — bad health release unchanged (manual)"
-skip "Test 6 — reboot jail cogs up (manual)"
+if [[ -f "$ROOT/.cogs/state.db" ]]; then
+  lg=$(sqlite3 "$ROOT/.cogs/state.db" "SELECT r.commit_sha FROM app_release_pointers p JOIN app_releases r ON r.id=p.last_good_release_id WHERE p.app_id='goldilocks' LIMIT 1;" 2>/dev/null || true)
+  if [[ -n "$lg" ]]; then
+    pass "Test 4 — goldilocks last_good release set"
+  else
+    fail "Test 4 — goldilocks has no last_good release in state.db"
+  fi
+  bad_health=$(sqlite3 "$ROOT/.cogs/state.db" "SELECT a.id FROM app_release_pointers p JOIN app_releases r ON r.id=p.current_release_id JOIN apps a ON a.id=p.app_id WHERE a.desired_present=1 AND r.health_ok=0 LIMIT 1;" 2>/dev/null || true)
+  if [[ -z "$bad_health" ]]; then
+    pass "Test 5 — no current release with health_ok=0"
+  else
+    fail "Test 5 — app $bad_health serving release that failed health"
+  fi
+else
+  fail "Test 4/5 — missing state.db"
+fi
+
+if [[ "${COGS_ACCEPTANCE_REBOOT:-}" == "1" ]]; then
+  skip "Test 6 — reboot check is operator-driven (COGS_ACCEPTANCE_REBOOT=1 set)"
+else
+  skip "Test 6 — set COGS_ACCEPTANCE_REBOOT=1 after manual jail reboot to acknowledge"
+fi
 
 # Test 7 — duplicate repo guard (state present)
 if [[ -f "$ROOT/.cogs/state.db" ]]; then
@@ -158,7 +206,16 @@ else
   skip "Test 10 — up.log missing"
 fi
 
-skip "Test 11 — UI error surfacing (manual browser)"
+if [[ -n "$COOKIE" ]]; then
+  stream=$(curl -sS --max-time 5 -H "Cookie: $COOKIE" "$ADMIN/api/reconcile/stream" 2>/dev/null | head -20 || true)
+  if echo "$stream" | grep -q 'last_error'; then
+    pass "Test 11 — reconcile stream exposes last_error field"
+  else
+    fail "Test 11 — reconcile stream missing last_error (auth or SSE broken)"
+  fi
+else
+  fail "Test 11 — needs acceptance admin cookie"
+fi
 
 # Test 12 — up.log size / rotation
 if [[ -f "$UPLOG" ]]; then
@@ -172,27 +229,17 @@ else
   skip "Test 12 — up.log missing"
 fi
 
-# Test 13 — each workspace app has a running process (no python3 in jail)
-workspace_app_names() {
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "FAIL: Test 13 — jq required (install jq in the jail)" >&2
-    return 1
-  fi
-  jq -r '.apps[]?.name // empty' "$ROOT/cogs.workspace.json"
-}
-
-workspace_app_path() {
-  local app=$1
-  jq -r --arg n "$app" '.apps[] | select(.name==$n) | .path // empty' "$ROOT/cogs.workspace.json"
-}
-
-if [[ -f "$ROOT/cogs.workspace.json" ]]; then
-  if ! command -v jq >/dev/null 2>&1; then
-    fail "Test 13 — jq not installed (required)"
+# Test 13 — each present app in state.db has a running process
+if [[ ! -f "$ROOT/.cogs/state.db" ]]; then
+  fail "Test 13 — missing state.db"
+else
+  if ! command -v sqlite3 >/dev/null 2>&1; then
+    fail "Test 13 — sqlite3 required"
   else
-    while IFS= read -r app; do
+    while IFS='|' read -r app path; do
       [[ -z "$app" ]] && continue
-      path=$(workspace_app_path "$app")
+      path="${path#"${path%%[![:space:]]*}"}"
+      path="${path%"${path##*[![:space:]]}"}"
       pidf=""
       if [[ -n "$path" ]]; then
         pidf="$ROOT/${path}/.cogs/run/app.pid"
@@ -216,7 +263,7 @@ if [[ -f "$ROOT/cogs.workspace.json" ]]; then
       else
         fail "Test 13 — app ${app} not running (no live app.pid)"
       fi
-    done < <(workspace_app_names)
+    done < <(sqlite3 -separator '|' "$ROOT/.cogs/state.db" "SELECT id, app_path FROM apps WHERE desired_present=1 ORDER BY id;" 2>/dev/null || true)
   fi
 fi
 
@@ -241,6 +288,16 @@ fi
 gold_api=$(grep -E '^COGS_PUBLIC_API_URL=' "$ROOT/apps/goldilocks/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
 if [[ -n "$gold_api" ]]; then
   check_tunnel_host "goldilocks-api" "$gold_api"
+fi
+
+# Test 16 — no duplicate owned CF resources per app/kind
+if [[ -f "$ROOT/.cogs/state.db" ]]; then
+  dup=$(sqlite3 "$ROOT/.cogs/state.db" "SELECT app_id||':'||kind||':'||external_id FROM app_owned GROUP BY app_id, kind, external_id HAVING COUNT(*)>1 LIMIT 5;" 2>/dev/null || true)
+  if [[ -z "$dup" ]]; then
+    pass "Test 16 — no duplicate app_owned rows"
+  else
+    fail "Test 16 — duplicate owned resources: $(echo "$dup" | tr '\n' ' ')"
+  fi
 fi
 
 # Test 15 — state.db: no app stuck unconverged / last_error
