@@ -18,6 +18,7 @@ ensure_acceptance_cookie() {
   if [[ -n "$COOKIE" ]]; then
     return 0
   fi
+  acceptance_load_admin_credentials "$ROOT" || true
   local user pass
   user="${COGS_ACCEPTANCE_ADMIN_USER:-}"
   pass="${COGS_ACCEPTANCE_ADMIN_PASSWORD:-}"
@@ -87,7 +88,12 @@ echo "CoGS acceptance-reconcile (ROOT=$ROOT ADMIN=$ADMIN PUBLIC=${PUBLIC_ADMIN:-
 echo "===================================================="
 
 if ! ensure_acceptance_cookie; then
-  fail "acceptance auth — set COGS_ADMIN_COOKIE or COGS_ACCEPTANCE_ADMIN_USER + COGS_ACCEPTANCE_ADMIN_PASSWORD"
+  fail "acceptance auth — set COGS_ADMIN_COOKIE, COGS_ACCEPTANCE_ADMIN_*, or apps/admin/.env on loopback"
+fi
+
+if [[ -z "${COGS_ACCEPTANCE_FULL:-}" && -n "$COOKIE" && -f "$ROOT/apps/admin/.env" ]] && acceptance_admin_is_loopback "$ADMIN"; then
+  COGS_ACCEPTANCE_FULL=1
+  export COGS_ACCEPTANCE_FULL
 fi
 
 curl_api() {
@@ -176,7 +182,7 @@ if [[ -f "$ROOT/.cogs/state.db" ]]; then
 fi
 
 # Test 8 — hostname check (401 without session is a failure)
-code=$(curl -sS -o /dev/null -w "%{http_code}" "$ADMIN/api/hostnames/check?subdomain=test&zone=example.com&skip_app=x" 2>/dev/null || echo "000")
+code=$(curl -sS -o /dev/null -w "%{http_code}" -H "Cookie: $COOKIE" "$ADMIN/api/hostnames/check?subdomain=test&zone=example.com&skip_app=x" 2>/dev/null || echo "000")
 if [[ "$code" == "401" ]]; then
   fail "Test 8 — hostnames/check HTTP 401 (set COGS_ADMIN_COOKIE or fix auth)"
 elif [[ "$code" == "403" || "$code" == "200" ]]; then
