@@ -1,6 +1,7 @@
 package appbuild
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,18 +27,44 @@ func RestoreTrackedUIArtifacts(appDir, pagesDir string) error {
 			relPaths = append(relPaths, filepath.ToSlash(p))
 		}
 	}
-	if len(relPaths) == 0 {
+	if len(relPaths) > 0 {
+		cmd := exec.Command("git", append([]string{"checkout", "HEAD", "--"}, relPaths...)...)
+		cmd.Dir = appDir
+		if err := cmd.Run(); err != nil {
+			cmd = exec.Command("git", append([]string{"restore", "--source=HEAD", "--worktree", "--"}, relPaths...)...)
+			cmd.Dir = appDir
+			if err := cmd.Run(); err != nil {
+				return err
+			}
+		}
+	}
+	return RemoveUntrackedPublicBuildOutput(appDir, pagesDir)
+}
+
+// RemoveUntrackedPublicBuildOutput deletes all untracked files under public/ (build droppings).
+func RemoveUntrackedPublicBuildOutput(appDir, pagesDir string) error {
+	if pagesDir == "" {
+		pagesDir = "public"
+	}
+	if _, err := exec.LookPath("git"); err != nil {
 		return nil
 	}
-	cmd := exec.Command("git", append([]string{"checkout", "HEAD", "--"}, relPaths...)...)
+	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all", "--", pagesDir)
 	cmd.Dir = appDir
-	if err := cmd.Run(); err == nil {
+	out, err := cmd.Output()
+	if err != nil {
 		return nil
 	}
-	cmd = exec.Command("git", append([]string{"restore", "--source=HEAD", "--worktree", "--"}, relPaths...)...)
-	cmd.Dir = appDir
-	if err := cmd.Run(); err != nil {
-		return err
+	for _, line := range bytes.Split(out, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) < 4 || line[0] != '?' || line[1] != '?' {
+			continue
+		}
+		rel := strings.TrimSpace(string(line[3:]))
+		if rel == "" {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(appDir, filepath.FromSlash(rel)))
 	}
 	return RemoveUntrackedUIHashAssets(appDir, pagesDir)
 }

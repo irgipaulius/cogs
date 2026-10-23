@@ -34,6 +34,28 @@ func TestRestoreTrackedUIArtifactsChecksOutPublicConfig(t *testing.T) {
 	}
 }
 
+func TestRemoveUntrackedPublicBuildOutput(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init", "-b", "main")
+	runGit(t, root, "config", "user.email", "t@example.com")
+	runGit(t, root, "config", "user.name", "t")
+	app := filepath.Join(root, "apps", "todo")
+	pub := filepath.Join(app, "public", "assets")
+	_ = os.MkdirAll(pub, 0o755)
+	tracked := filepath.Join(pub, "keep.js")
+	junk := filepath.Join(pub, "index-C4xVkIzc.js")
+	_ = os.WriteFile(tracked, []byte("// t\n"), 0o644)
+	_ = os.WriteFile(junk, []byte("// j\n"), 0o644)
+	runGit(t, root, "add", "apps/todo/public/assets/keep.js")
+	runGit(t, root, "commit", "-m", "assets")
+	if err := RemoveUntrackedPublicBuildOutput(app, "public"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(junk); !os.IsNotExist(err) {
+		t.Fatalf("junk remains: %v", err)
+	}
+}
+
 func TestRemoveUntrackedUIHashAssets(t *testing.T) {
 	root := t.TempDir()
 	runGit(t, root, "init", "-b", "main")
