@@ -129,6 +129,7 @@ func startAppWithBinary(projectDir, bin string) error {
 		return err
 	}
 	markAppHealthGrace(projectDir)
+	writeAppLogStartMark(projectDir)
 	return nil
 }
 
@@ -168,6 +169,7 @@ func startAppProcess(projectDir string, rebuild, quietIfRunning bool) error {
 		return err
 	}
 	markAppHealthGrace(projectDir)
+	writeAppLogStartMark(projectDir)
 	ux.AppOK(filepath.Base(projectDir), fmt.Sprintf("API started pid %d (%s)", cmd.Process.Pid, logPath))
 	return nil
 }

@@ -134,7 +134,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	tick := time.NewTicker(5 * time.Second)
 	reconcileTick := time.NewTicker(3 * time.Minute)
-	oauthTick := time.NewTicker(45 * time.Minute)
+	oauthTick := time.NewTicker(10 * time.Minute)
 	defer tick.Stop()
 	defer reconcileTick.Stop()
 	defer oauthTick.Stop()
@@ -168,6 +168,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 				noteAppStart(dir, pid)
 			}
 			recordAppCrashIfAny(st, a.Name, dir)
+			recordAppBackgroundJobErrors(st, a.Name, dir)
 			if noTunnel {
 				continue
 			}

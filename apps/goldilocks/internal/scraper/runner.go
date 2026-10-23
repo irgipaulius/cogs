@@ -43,9 +43,8 @@ func (r *Runner) Start(ctx context.Context) {
 	if r.Interval <= 0 {
 		r.Interval = 45 * time.Second
 	}
-	if r.ScriptPath == "" {
-		r.ScriptPath = "scripts/scrape_chunk.py"
-	}
+	appRoot, _ := os.Getwd()
+	r.ScriptPath = ResolveScriptPath(appRoot, r.ScriptPath)
 	go func() {
 		time.Sleep(5 * time.Second)
 		for {
@@ -80,9 +79,6 @@ func (r *Runner) runOnce(ctx context.Context) error {
 	}
 	cmd := exec.CommandContext(ctx, py, args...)
 	cmd.Dir = filepath.Dir(r.ScriptPath)
-	if wd := os.Getenv("COGS_WORKDIR"); wd != "" {
-		cmd.Dir = wd
-	}
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		log.Printf("scraper: %s", string(out))

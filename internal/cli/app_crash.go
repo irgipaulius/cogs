@@ -26,9 +26,8 @@ func recordAppCrashIfAny(st *state.Store, appID, projectDir string) {
 }
 
 func tailAppLogPanic(projectDir string) string {
-	logPath := filepath.Join(projectDir, ".cogs", "run", "app.log")
-	b, err := os.ReadFile(logPath)
-	if err != nil || len(b) == 0 {
+	b := appLogBytesSinceStart(projectDir)
+	if len(b) == 0 {
 		return ""
 	}
 	const tail = 8192
@@ -52,5 +51,6 @@ func tailAppLogPanic(projectDir string) string {
 func noteAppStart(projectDir string, pid int) {
 	path := filepath.Join(projectDir, ".cogs", "run", "last-start")
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	_ = os.WriteFile(path, []byte(time.Now().UTC().Format(time.RFC3339Nano) + " " + strconv.Itoa(pid) + "\n"), 0o644)
+	_ = os.WriteFile(path, []byte(time.Now().UTC().Format(time.RFC3339Nano)+" "+strconv.Itoa(pid)+"\n"), 0o644)
+	writeAppLogStartMark(projectDir)
 }
