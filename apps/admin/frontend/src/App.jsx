@@ -576,14 +576,19 @@ export default function App() {
                 const meta = appMeta(name);
                 const t = appTel(name);
                 const live = !!m.running;
+                const prov = board?.provision?.[name];
+                const notReady = prov && !prov.ready;
                 return (
                   <button key={name} type="button" className="app-card" onClick={() => go(`app/${name}/hosting`)}>
                     <div className="app-card-head">
                       <h4>{name}</h4>
-                      <span className={`status-pill ${live ? 'live' : 'down'}`}>
-                        {live ? 'Live' : 'Offline'}
+                      <span className={`status-pill ${notReady ? 'down' : live ? 'live' : 'down'}`}>
+                        {notReady ? 'Not provisioned' : live ? 'Live' : 'Offline'}
                       </span>
                     </div>
+                    {notReady && prov.reasons?.[0] && (
+                      <p className="err">{prov.reasons[0]}</p>
+                    )}
                     <div className="app-card-stat">
                       <span>
                         {live ? (m.pid ? `PID ${m.pid}` : 'Health check OK') : 'Not responding'}
@@ -624,6 +629,7 @@ export default function App() {
             redeploy={redeploy}
             rollback={rollback}
             deployEvents={deployEvents}
+            provision={board?.provision?.[selectedApp]}
             sqlText={sqlText}
             setSqlText={setSqlText}
             tables={tables}

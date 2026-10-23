@@ -209,8 +209,8 @@ func runLaunch(flags launchFlags) error {
 		return err
 	}
 
-	// Restart cleanly: stop this host's tunnel and API before serving the new build.
-	if !flags.skipTunnel {
+	// Full launch: stop tunnel/API before cutover. Quick redeploy builds first, then swaps below.
+	if !flags.quick && !flags.skipTunnel {
 		_ = stopTunnel(abs, m.TunnelName)
 		stopApp(abs)
 	}
@@ -386,7 +386,11 @@ func runGo(dir string, args ...string) error {
 	wsRoot, _, _ := workspace.FindRoot(dir)
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
-	cmd.Env = gowork.AppendEnv(wsRoot, os.Environ())
+	env, err := gowork.BuildEnv(wsRoot, dir, os.Environ())
+	if err != nil {
+		return err
+	}
+	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

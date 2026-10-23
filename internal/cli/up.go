@@ -12,6 +12,8 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/boot"
+	"github.com/irgipaulius/cogs/pkg/gowork"
+	"github.com/irgipaulius/cogs/pkg/provision"
 	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
@@ -114,6 +116,9 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 		return err
 	}
 	boot.LoadUpEnvIntoProcess(root)
+	if err := gowork.EnsureOverlayHealthy(root); err != nil {
+		ux.Warn("go.work overlay: " + err.Error())
+	}
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)
 	defer removePIDFileIfOwn(upPIDPath(root), os.Getpid())
 
@@ -132,23 +137,45 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 					continue
 				}
 			}
+			pst := provision.Assess(root, a.Name, dir)
+			if ok, _ := upGate.allow(a.Name, pst); !ok {
+				if !quiet && upGate.mayLog(a.Name) {
+					ux.Warn(a.Name + ": not provisioned — skipping (" + strings.Join(pst.Reasons, "; ") + ")")
+				}
+				continue
+			}
 			healthURL := appHealthURL(dir)
 			if _, ok := appRunning(dir); ok {
 				if healthURL != "" && !appInHealthGrace(dir) && !probeAppHealth(healthURL) {
 					stopApp(dir)
-					if err := ensureAppRunningQuiet(dir); err != nil && !quiet {
-						ux.Warn(a.Name + ": " + err.Error())
+					if err := ensureAppRunningQuiet(dir); err != nil {
+						upGate.recordFailure(a.Name, err.Error())
+						if !quiet {
+							ux.Warn(a.Name + ": " + err.Error())
+						}
 					}
+				}
+				if noTunnel {
+					continue
+				}
+				if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
+					upGate.recordFailure(a.Name, err.Error())
 				}
 				continue
 			}
-			if err := ensureAppRunningQuiet(dir); err != nil && !quiet {
-				ux.Warn(a.Name + ": " + err.Error())
+			if err := ensureAppRunningQuiet(dir); err != nil {
+				upGate.recordFailure(a.Name, err.Error())
+				if !quiet {
+					ux.Warn(a.Name + ": " + err.Error())
+				}
+				continue
 			}
 			if noTunnel {
 				continue
 			}
-			_ = startTunnelBackgroundQuiet(dir, "")
+			if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
+				upGate.recordFailure(a.Name, err.Error())
+			}
 		}
 	}
 	supervise(false)

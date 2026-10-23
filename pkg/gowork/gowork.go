@@ -3,7 +3,6 @@ package gowork
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -18,21 +17,14 @@ func Path(wsRoot string) string {
 	return filepath.Join(wsRoot, relPath)
 }
 
-// AppendEnv sets GOWORK when .cogs/go.work exists.
+// AppendEnv sets GOWORK for workspace-scoped tools when the overlay is healthy.
+// Prefer BuildEnv(wsRoot, buildDir, env) for compiles so worktrees stay hermetic.
 func AppendEnv(wsRoot string, env []string) []string {
-	p := Path(wsRoot)
-	if st, err := os.Stat(p); err != nil || st.IsDir() {
-		return env
+	out, err := BuildEnv(wsRoot, wsRoot, env)
+	if err != nil {
+		return stripGOWORK(env)
 	}
-	key := "GOWORK="
-	out := make([]string, 0, len(env)+1)
-	for _, e := range env {
-		if strings.HasPrefix(e, key) {
-			continue
-		}
-		out = append(out, e)
-	}
-	return append(out, key+p)
+	return out
 }
 
 // EnsureModule adds a module path to .cogs/go.work (never touches tracked go.work).
@@ -63,11 +55,7 @@ func EnsureModule(wsRoot, moduleRel string) error {
 	if err := writeUses(p, existing); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "work", "sync")
-	cmd.Dir = wsRoot
-	cmd.Env = AppendEnv(wsRoot, os.Environ())
-	_, _ = cmd.CombinedOutput()
-	return nil
+	return EnsureOverlayHealthy(wsRoot)
 }
 
 // SyncFromRepo copies use paths from tracked go.work into .cogs/go.work when missing.
@@ -109,7 +97,7 @@ func readUses(path string) []string {
 		if inUse && trim == ")" {
 			break
 		}
-		if inUse && strings.HasPrefix(trim, "./") {
+		if inUse && (strings.HasPrefix(trim, "./") || strings.HasPrefix(trim, "../")) {
 			uses = append(uses, trim)
 		}
 	}

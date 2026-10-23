@@ -137,15 +137,14 @@ func (s *Server) handleHostnameCheck(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 	host := hostcheck.PageHostname(sub, zone)
-	conflict, err := hostcheck.FindPageHostConflict(s.WorkspaceRoot, sub, zone, skip)
+	conflicts, err := hostcheck.FindHostConflicts(s.WorkspaceRoot, sub, zone, skip)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := map[string]any{"ok": conflict == "", "hostname": host}
-	if conflict != "" {
-		out["conflict_app"] = conflict
-		out["error"] = fmt.Sprintf("hostname already used by app %q", conflict)
+	out := map[string]any{"ok": len(conflicts) == 0, "hostname": host}
+	if len(conflicts) > 0 {
+		out["error"] = conflicts[0]
 	}
 	writeJSON(w, out)
 }

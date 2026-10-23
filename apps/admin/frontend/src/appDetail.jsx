@@ -109,6 +109,7 @@ export function AppDetailView({
   redeploy,
   rollback,
   deployEvents,
+  provision,
   sqlText,
   setSqlText,
   tables,
@@ -244,6 +245,46 @@ export function AppDetailView({
                 {e.detail ? `— ${e.detail.slice(0, 120)}` : ''}
               </div>
             ))}
+          {provision && !provision.ready && (
+            <div className="modal-err">
+              <strong>Not provisioned</strong>
+              <ul>
+                {(provision.reasons || []).map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {me?.is_root && (
+            <div className="btn-row">
+              {provision && !provision.ready && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    api(`/api/apps/${encodeURIComponent(app)}/finish-install`, { method: 'POST' }).then(
+                      () => go('apps'),
+                    )
+                  }
+                >
+                  Finish install
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  if (!window.confirm(`Remove ${app} from CoGS? Clone can be kept.`)) return;
+                  api(`/api/apps/${encodeURIComponent(app)}/remove`, {
+                    method: 'POST',
+                    body: JSON.stringify({ remove_clone: false }),
+                  }).then(() => go('apps'));
+                }}
+              >
+                Remove app
+              </button>
+            </div>
+          )}
           {canRedeploy && (
             <div className="btn-row">
               <button type="button" className="btn btn-primary" onClick={() => redeploy(app)}>

@@ -54,6 +54,9 @@ func (r *Runner) runStages(ctx context.Context, job *Job, log io.Writer) error {
 	if req.ScaffoldOnly {
 		return r.runScaffold(ctx, job, log)
 	}
+	if strings.TrimSpace(req.FinishApp) != "" {
+		return r.runFinishInstall(ctx, job, log)
+	}
 
 	if err := r.runStage(ctx, job, StageClone, log, func() error {
 		src, err := appinstall.MaterializeRepo(ctx, r.WSRoot, req.RepoFull)
@@ -103,7 +106,7 @@ func (r *Runner) runStages(ctx context.Context, job *Job, log io.Writer) error {
 		if _, err := gomod.FixLocalReplace(job.AppDir, r.WSRoot); err != nil {
 			return err
 		}
-		if err := gowork.RepairOverlay(r.WSRoot); err != nil {
+		if err := gowork.EnsureOverlayHealthy(r.WSRoot); err != nil {
 			return err
 		}
 		return gitconfig.EnsureSafeDirectory(ctx, r.WSRoot, job.AppDir)
@@ -129,6 +132,11 @@ func (r *Runner) runStages(ctx context.Context, job *Job, log io.Writer) error {
 		if err != nil {
 			return err
 		}
+		job.SideEffects.Registered = true
+		if rel, e := filepath.Rel(r.WSRoot, job.AppDir); e == nil {
+			job.SideEffects.AppPath = filepath.ToSlash(rel)
+		}
+		r.persist(job)
 		fmt.Fprintln(log, detail)
 		return nil
 	}); err != nil {
@@ -147,7 +155,11 @@ func (r *Runner) runStages(ctx context.Context, job *Job, log io.Writer) error {
 		pkg := "./" + filepath.ToSlash(rel) + "/..."
 		cmd := exec.CommandContext(ctx, "go", "build", "-o", os.DevNull, pkg)
 		cmd.Dir = r.WSRoot
-		cmd.Env = hostenv.CLIEnv(r.WSRoot)
+		env, err := gowork.BuildEnv(r.WSRoot, job.AppDir, hostenv.CLIEnv(r.WSRoot))
+		if err != nil {
+			return err
+		}
+		cmd.Env = env
 		out, err := cmd.CombinedOutput()
 		r.setStageOutput(job, StageBuild, string(out))
 		if err != nil {
@@ -202,6 +214,94 @@ func (r *Runner) runStages(ctx context.Context, job *Job, log io.Writer) error {
 		defer cancel()
 		ghcli.StarRepoBestEffort(c, req.RepoFull)
 	}()
+	return nil
+}
+
+func (r *Runner) runFinishInstall(ctx context.Context, job *Job, log io.Writer) error {
+	name := strings.TrimSpace(job.Request.FinishApp)
+	_, ws, err := workspace.FindRoot(r.WSRoot)
+	if err != nil {
+		return err
+	}
+	appDir, err := workspace.ResolveApp(r.WSRoot, ws, name)
+	if err != nil {
+		return err
+	}
+	job.AppName = name
+	job.AppDir = appDir
+	job.GitRoot = workspace.GitRootForApp(r.WSRoot, name, "")
+	req := job.Request
+
+	if err := r.runStage(ctx, job, StagePrepare, log, func() error {
+		if _, err := gomod.FixLocalReplace(job.AppDir, r.WSRoot); err != nil {
+			return err
+		}
+		return gowork.EnsureOverlayHealthy(r.WSRoot)
+	}); err != nil {
+		return err
+	}
+	// reuse launch/health from main pipeline — inline call remaining stages
+	for _, stage := range []struct {
+		id StageID
+		fn func() error
+	}{
+		{StageBuild, func() error {
+			if _, err := os.Stat(filepath.Join(job.AppDir, "go.mod")); err != nil {
+				return nil
+			}
+			rel, err := filepath.Rel(r.WSRoot, job.AppDir)
+			if err != nil {
+				return err
+			}
+			pkg := "./" + filepath.ToSlash(rel) + "/..."
+			cmd := exec.CommandContext(ctx, "go", "build", "-o", os.DevNull, pkg)
+			cmd.Dir = r.WSRoot
+			env, err := gowork.BuildEnv(r.WSRoot, job.AppDir, hostenv.CLIEnv(r.WSRoot))
+			if err != nil {
+				return err
+			}
+			cmd.Env = env
+			out, err := cmd.CombinedOutput()
+			r.setStageOutput(job, StageBuild, string(out))
+			if err != nil {
+				return fmt.Errorf("go build: %w", err)
+			}
+			return nil
+		}},
+		{StageLaunch, func() error {
+			cmd := hostenv.CogsCommandContext(ctx, r.WSRoot, "launch", job.AppDir, "-y", "--background-serve")
+			out, err := cmd.CombinedOutput()
+			r.setStageOutput(job, StageLaunch, string(out))
+			fmt.Fprint(log, string(out))
+			if err != nil {
+				msg := string(out)
+				if strings.Contains(msg, "DNS API token is required") {
+					return fmt.Errorf("Cloudflare DNS API token missing — set COGS_CF_API_TOKEN on the host")
+				}
+				return fmt.Errorf("cogs launch: %w", err)
+			}
+			return nil
+		}},
+		{StageHealth, func() error {
+			url := healthURL(job.AppDir, job.AppName)
+			if url == "" {
+				return nil
+			}
+			deadline := time.Now().Add(90 * time.Second)
+			for time.Now().Before(deadline) {
+				if probeHTTPHealth(url) {
+					return nil
+				}
+				time.Sleep(2 * time.Second)
+			}
+			return fmt.Errorf("health check timed out for %s", url)
+		}},
+	} {
+		if err := r.runStage(ctx, job, stage.id, log, stage.fn); err != nil {
+			return err
+		}
+	}
+	_ = req
 	return nil
 }
 
@@ -297,10 +397,13 @@ func (r *Runner) setStageOutput(job *Job, id StageID, out string) {
 }
 
 func (r *Runner) rollback(job *Job) {
-	if job.AppName == "" {
+	if !job.SideEffects.Registered || job.AppName == "" {
 		return
 	}
 	_ = workspace.RemoveInstalledApp(r.WSRoot, job.AppName)
+	if job.SideEffects.AppPath != "" {
+		_ = gowork.RemoveModule(r.WSRoot, job.SideEffects.AppPath)
+	}
 }
 
 func (r *Runner) failJob(job *Job, stage StageID, err error) {

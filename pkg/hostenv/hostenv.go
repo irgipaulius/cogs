@@ -26,11 +26,7 @@ func CLIEnv(wsRoot string) []string {
 	if home != "" {
 		env = setEnv(env, "HOME", home)
 	}
-	if wsRoot != "" {
-		if p := gowork.Path(wsRoot); p != "" {
-			env = setEnv(env, "GOWORK", p)
-		}
-	}
+	// GOWORK is applied per command via gowork.BuildEnv — not globally here.
 	return env
 }
 
@@ -48,15 +44,17 @@ func setEnv(env []string, key, val string) []string {
 
 // CogsCommandContext runs the host cogs CLI (PATH or go run from workspace root).
 func CogsCommandContext(ctx context.Context, wsRoot string, args ...string) *exec.Cmd {
+	base := append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
+	env, _ := gowork.BuildEnv(wsRoot, wsRoot, base)
 	if bin, err := exec.LookPath("cogs"); err == nil {
 		cmd := exec.CommandContext(ctx, bin, args...)
 		cmd.Dir = wsRoot
-		cmd.Env = append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
+		cmd.Env = env
 		return cmd
 	}
 	cmd := exec.CommandContext(ctx, "go", append([]string{"run", "./cmd/cogs"}, args...)...)
 	cmd.Dir = wsRoot
-	cmd.Env = append(CLIEnv(wsRoot), "COGS_WORKSPACE_ROOT="+wsRoot)
+	cmd.Env = env
 	return cmd
 }
 

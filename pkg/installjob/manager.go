@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/irgipaulius/cogs/pkg/gitpublic"
+	"github.com/irgipaulius/cogs/pkg/provision"
 )
 
 // Manager runs install jobs asynchronously with persistence.
@@ -79,6 +80,11 @@ func (m *Manager) Create(ctx context.Context, req Request) (*Job, error) {
 	if req.RepoFull == "" && !req.ScaffoldOnly {
 		return nil, fmt.Errorf("repo required (owner/name)")
 	}
+	if req.FinishApp == "" && req.RepoFull != "" {
+		if existing := provision.InstalledByRepo(m.WSRoot, req.RepoFull); existing != "" {
+			return nil, fmt.Errorf("repository already installed as %q — remove it first or use Finish install on that app", existing)
+		}
+	}
 	id, err := newID()
 	if err != nil {
 		return nil, err
@@ -86,6 +92,9 @@ func (m *Manager) Create(ctx context.Context, req Request) (*Job, error) {
 	job := newJob(id, req)
 	if job.AppName == "" {
 		job.AppName = strings.TrimSpace(req.AppName)
+	}
+	if job.AppName == "" {
+		job.AppName = strings.TrimSpace(req.FinishApp)
 	}
 	if job.AppName == "" && req.RepoFull != "" {
 		if i := strings.LastIndex(req.RepoFull, "/"); i >= 0 && i+1 < len(req.RepoFull) {

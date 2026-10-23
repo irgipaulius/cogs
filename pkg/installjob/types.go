@@ -81,6 +81,7 @@ type Request struct {
 	PageApex       bool   `json:"page_apex"`
 	Zone           string `json:"zone"`
 	ScaffoldOnly   bool   `json:"scaffold_only"`
+	FinishApp      string `json:"finish_app,omitempty"` // provision an already-registered app
 }
 
 // Job is a persisted install job.
@@ -100,6 +101,15 @@ type Job struct {
 	Stages       []Stage `json:"stages"`
 
 	Error string `json:"error,omitempty"`
+
+	// SideEffects tracks what this job alone changed (for rollback).
+	SideEffects JobSideEffects `json:"side_effects,omitempty"`
+}
+
+// JobSideEffects records mutations to undo on failure.
+type JobSideEffects struct {
+	Registered bool   `json:"registered,omitempty"`
+	AppPath    string `json:"app_path,omitempty"`
 }
 
 func (j *Job) stageIndex(id StageID) int {

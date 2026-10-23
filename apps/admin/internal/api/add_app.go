@@ -9,6 +9,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/gitpublic"
 	"github.com/irgipaulius/cogs/pkg/hostcheck"
 	"github.com/irgipaulius/cogs/pkg/installjob"
+	"github.com/irgipaulius/cogs/pkg/provision"
 )
 
 func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *adminstore.EffectiveUser) {
@@ -42,12 +43,20 @@ func (s *Server) handleAddApp(w http.ResponseWriter, r *http.Request, user *admi
 		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if zone := strings.TrimSpace(body.Zone); zone != "" {
-		if conflict, err := hostcheck.FindPageHostConflict(s.WorkspaceRoot, pageSub, zone, strings.TrimSpace(body.Name)); err != nil {
+	zone := strings.TrimSpace(body.Zone)
+	skipApp := strings.TrimSpace(body.Name)
+	if zone != "" {
+		if conflicts, err := hostcheck.FindHostConflicts(s.WorkspaceRoot, pageSub, zone, skipApp); err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
-		} else if conflict != "" {
-			writeAPIError(w, http.StatusConflict, "hostname already used by app "+conflict)
+		} else if len(conflicts) > 0 {
+			writeAPIError(w, http.StatusConflict, conflicts[0])
+			return
+		}
+	}
+	if body.Repo != "" {
+		if existing := provision.InstalledByRepo(s.WorkspaceRoot, gitpublic.NormalizeFullName(body.Repo)); existing != "" && existing != skipApp {
+			writeAPIError(w, http.StatusConflict, "repository already installed as "+existing)
 			return
 		}
 	}

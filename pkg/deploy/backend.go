@@ -35,6 +35,9 @@ type Options struct {
 
 // DeployBackend builds at commit, health-checks, activates release pointer, restarts app.
 func DeployBackend(ctx context.Context, wsRoot string, opts Options) (detail string, err error) {
+	if err := gowork.EnsureOverlayHealthy(wsRoot); err != nil {
+		return "", err
+	}
 	_, ws, err := workspace.FindRoot(wsRoot)
 	if err != nil {
 		return "", err
@@ -183,7 +186,11 @@ func failDeploy(wsRoot string, ev cockpit.DeployEvent, err error) (string, error
 func goBuild(ctx context.Context, wsRoot, appDir, outBin string) error {
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outBin, "./cmd/app")
 	cmd.Dir = appDir
-	cmd.Env = gowork.AppendEnv(wsRoot, append(os.Environ(), "CGO_ENABLED=0"))
+	env, err := gowork.BuildEnv(wsRoot, appDir, append(os.Environ(), "CGO_ENABLED=0"))
+	if err != nil {
+		return err
+	}
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("go build: %w: %s", err, strings.TrimSpace(string(out)))

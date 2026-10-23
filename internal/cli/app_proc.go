@@ -12,6 +12,7 @@ import (
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
+	"github.com/irgipaulius/cogs/pkg/gowork"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/release"
 	"github.com/irgipaulius/cogs/pkg/workspace"
@@ -144,6 +145,11 @@ func buildAppBinary(projectDir string) (string, error) {
 	cmd.Dir = projectDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if wsRoot, _, err := workspace.FindRoot(projectDir); err == nil {
+		if env, e := gowork.BuildEnv(wsRoot, projectDir, os.Environ()); e == nil {
+			cmd.Env = env
+		}
+	}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("build app: %w", err)
 	}

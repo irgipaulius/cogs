@@ -85,6 +85,23 @@ func cfTokenTunnel() (string, error) {
 	return wranglerOAuthToken()
 }
 
+// cfTokenQueue prefers a Cloudflare API token (Queues) and falls back to the Wrangler OAuth session.
+func cfTokenQueue(projectDir string) (string, error) {
+	if t := strings.TrimSpace(os.Getenv("COGS_CF_API_TOKEN")); t != "" {
+		return t, nil
+	}
+	if wsRoot, _, err := workspace.FindRoot(projectDir); err == nil {
+		if t, err := workspace.DNSTokenForZone(wsRoot, ""); err == nil && t != "" {
+			return t, nil
+		}
+	}
+	tok, err := wranglerOAuthToken()
+	if err != nil {
+		return "", fmt.Errorf("queue API needs COGS_CF_API_TOKEN with Account.Queues Read or a valid wrangler login: %w", err)
+	}
+	return tok, nil
+}
+
 func cfRequest(token, method, url string, body any) (cfResponse, error) {
 	var r io.Reader
 	if body != nil {

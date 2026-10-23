@@ -52,6 +52,8 @@ func (s *Server) Handler(mux *http.ServeMux, spa http.Handler) {
 	mux.HandleFunc("GET /api/repos", s.auth(s.handleRepos))
 	mux.HandleFunc("GET /api/repos/preview", s.auth(s.handleRepoPreview))
 	mux.HandleFunc("POST /api/apps", s.auth(s.handleAddApp))
+	mux.HandleFunc("POST /api/apps/{name}/remove", s.auth(s.handleRemoveApp))
+	mux.HandleFunc("POST /api/apps/{name}/finish-install", s.auth(s.handleFinishInstall))
 	mux.HandleFunc("GET /api/installs", s.auth(s.handleListInstalls))
 	mux.HandleFunc("GET /api/installs/stream", s.auth(s.handleInstallStream))
 	mux.HandleFunc("GET /api/installs/{id}", s.auth(s.handleGetInstall))

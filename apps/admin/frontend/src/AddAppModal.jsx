@@ -93,9 +93,10 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
     }
     const sub = subdomain.trim();
     const t = setTimeout(() => {
+      const skip = encodeURIComponent(name.trim() || preview?.app?.name || '');
       const q = sub
-        ? `subdomain=${encodeURIComponent(sub)}&zone=${encodeURIComponent(z)}`
-        : `subdomain=&zone=${encodeURIComponent(z)}&page_apex=1`;
+        ? `subdomain=${encodeURIComponent(sub)}&zone=${encodeURIComponent(z)}&skip_app=${skip}`
+        : `subdomain=&zone=${encodeURIComponent(z)}&page_apex=1&skip_app=${skip}`;
       api(`/api/hostnames/check?${q}`)
         .then(setHostCheck)
         .catch(() => setHostCheck(null));

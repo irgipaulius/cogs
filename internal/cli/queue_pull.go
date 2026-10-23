@@ -29,7 +29,7 @@ func pullDeployQueueOnce(root string, ws workspace.Root) {
 	if queueID == "" {
 		return
 	}
-	token, err := cfTokenTunnel()
+	token, err := cfTokenQueue(root)
 	if err != nil {
 		logQueuePullErr("queue pull token: " + err.Error())
 		return

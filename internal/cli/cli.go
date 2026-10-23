@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/version"
 )
 
 // Run dispatches cogs subcommands.
@@ -61,7 +63,7 @@ func Run(args []string) error {
 		}
 		return cmdApps(args[1:])
 	case "version":
-		fmt.Println("cogs dev")
+		fmt.Println("cogs", version.String())
 		return nil
 	case "help", "-h", "--help":
 		return usage()

@@ -115,6 +115,11 @@ func SaveInstalledApp(wsRoot string, rec InstalledApp) error {
 	return os.WriteFile(installedPath(wsRoot), b, 0o644)
 }
 
+// ListInstalledApps returns all overlay-installed apps.
+func ListInstalledApps(wsRoot string) []InstalledApp {
+	return loadInstalled(wsRoot).Apps
+}
+
 // InstalledLookup returns overlay metadata for an app name.
 func InstalledLookup(wsRoot, name string) (InstalledApp, bool) {
 	for _, a := range loadInstalled(wsRoot).Apps {

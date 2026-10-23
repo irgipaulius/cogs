@@ -48,6 +48,7 @@ func FindPageHostConflict(wsRoot, pageSub, zone, skipApp string) (string, error)
 	if want == "" {
 		return "", nil
 	}
+	skipApp = strings.TrimSpace(skipApp)
 	_, ws, err := workspace.FindRoot(wsRoot)
 	if err != nil {
 		return "", err
@@ -64,9 +65,43 @@ func FindPageHostConflict(wsRoot, pageSub, zone, skipApp string) (string, error)
 		if err != nil {
 			continue
 		}
-		if strings.ToLower(cfg.PageHost()) == want {
+		if host := strings.ToLower(cfg.PageHost()); host != "" && host == want {
 			return a.Name, nil
 		}
 	}
 	return "", nil
+}
+
+// FindHostConflicts checks UI (and split API) hostnames against all apps.
+func FindHostConflicts(wsRoot, pageSub, zone, skipApp string) ([]string, error) {
+	zone = strings.TrimSpace(zone)
+	if zone == "" {
+		return nil, nil
+	}
+	skipApp = strings.TrimSpace(skipApp)
+	wantPage := strings.ToLower(PageHostname(pageSub, zone))
+	var conflicts []string
+	_, ws, err := workspace.FindRoot(wsRoot)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range ws.Apps {
+		if a.Name == skipApp {
+			continue
+		}
+		appDir, err := workspace.ResolveApp(wsRoot, ws, a.Name)
+		if err != nil {
+			continue
+		}
+		cfg, err := appcfg.Load(appDir)
+		if err != nil {
+			continue
+		}
+		if wantPage != "" {
+			if h := strings.ToLower(cfg.PageHost()); h != "" && h == wantPage {
+				conflicts = append(conflicts, fmt.Sprintf("UI hostname %s used by %q", h, a.Name))
+			}
+		}
+	}
+	return conflicts, nil
 }
