@@ -36,5 +36,40 @@ func RestoreTrackedUIArtifacts(appDir, pagesDir string) error {
 	}
 	cmd = exec.Command("git", append([]string{"restore", "--source=HEAD", "--worktree", "--"}, relPaths...)...)
 	cmd.Dir = appDir
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return RemoveUntrackedUIHashAssets(appDir, pagesDir)
+}
+
+// RemoveUntrackedUIHashAssets deletes untracked Vite hashed bundles under public/assets/.
+func RemoveUntrackedUIHashAssets(appDir, pagesDir string) error {
+	if pagesDir == "" {
+		pagesDir = "public"
+	}
+	assets := filepath.Join(appDir, pagesDir, "assets")
+	entries, err := os.ReadDir(assets)
+	if err != nil {
+		return nil
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return nil
+	}
+	for _, ent := range entries {
+		name := ent.Name()
+		if ent.IsDir() || !strings.HasPrefix(name, "index-") {
+			continue
+		}
+		if !strings.HasSuffix(name, ".js") && !strings.HasSuffix(name, ".css") {
+			continue
+		}
+		rel := filepath.ToSlash(filepath.Join(pagesDir, "assets", name))
+		cmd := exec.Command("git", "ls-files", "--error-unmatch", rel)
+		cmd.Dir = appDir
+		if cmd.Run() == nil {
+			continue
+		}
+		_ = os.Remove(filepath.Join(assets, name))
+	}
+	return nil
 }

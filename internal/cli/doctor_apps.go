@@ -23,6 +23,7 @@ type doctorFinding struct {
 
 func doctorWorkspace(root string, ws workspace.Root) []doctorFinding {
 	var out []doctorFinding
+	out = append(out, doctorRepoJunk(root)...)
 	if paths, err := gitrepo.RootOwnedGitFiles(root); err == nil {
 		if msg := gitrepo.FormatOwnershipWarning(root, paths); msg != "" {
 			out = append(out, doctorFinding{
