@@ -6,21 +6,30 @@ import (
 	"strings"
 )
 
-// NpmEnv returns environment for npm commands, avoiding deprecated global npmrc keys.
+// NpmEnv returns environment for npm commands, avoiding deprecated npm env config keys.
 func NpmEnv(extra []string) []string {
-	env := os.Environ()
-	out := make([]string, 0, len(env)+4)
+	env := stripNpmPythonEnv(os.Environ())
+	out := make([]string, 0, len(env)+3)
 	for _, e := range env {
-		if strings.HasPrefix(e, "npm_config_python=") {
-			continue
-		}
 		out = append(out, e)
 	}
 	out = append(out, "NPM_CONFIG_GLOBALCONFIG="+os.DevNull)
 	if py := npmPython(); py != "" {
-		out = append(out, "PYTHON="+py, "npm_config_python="+py)
+		out = append(out, "PYTHON="+py)
 	}
 	return append(out, extra...)
+}
+
+func stripNpmPythonEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		ek := strings.ToLower(e)
+		if strings.HasPrefix(ek, "npm_config_python=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func npmPython() string {
