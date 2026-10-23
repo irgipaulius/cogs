@@ -15,6 +15,7 @@ import (
 
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/api"
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/grid"
+	"github.com/irgipaulius/cogs/apps/goldilocks/internal/pack"
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/db"
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/scraper"
 	"github.com/irgipaulius/cogs/apps/goldilocks/internal/seed"
@@ -145,6 +146,9 @@ func serve(ctx context.Context, envFile string) error {
 	}
 
 	st := &store.Store{DB: pools.Writer}
+	if err := pack.EnsurePacked(ctx, st); err != nil {
+		log.Printf("climate tile pack: %v", err)
+	}
 	need, err := seed.NeedsSeed(ctx, st)
 	if err != nil {
 		return err

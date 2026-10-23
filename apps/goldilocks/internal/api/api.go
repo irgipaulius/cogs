@@ -28,6 +28,7 @@ func (noopBlob) Put(string, []byte) error  { return nil }
 func (a *API) Register(m *http.ServeMux) {
 	m.HandleFunc("GET /world/overview.json", a.handleOverview)
 	m.HandleFunc("GET /world/t/{path...}", a.handleWorldTilePath)
+	m.HandleFunc("GET /tiles/{level}/{sy}/{sx}", a.handleClimateBin)
 	m.HandleFunc("GET /api/tiles/{z}/{x}/{y}", a.handleMapTile)
 	m.HandleFunc("GET /api/cells", a.handleCells)
 }

@@ -568,6 +568,8 @@ const state = {
 let overviewPts = null;
 let job = 0;
 let rendering = false;
+let viewportSyncTimer = 0;
+let viewportSyncQueued = false;
 let hoverRow = null;
 let areaRect = null;
 let rubber = null;
@@ -604,7 +606,32 @@ function syncCellPane() {
   pane.style.opacity = "0.48";
   pane.style.filter = state.draw === "heat" ? heatBlur() : "";
 }
-map.on("zoomend", syncCellPane);
+function viewportTilesMissing(box) {
+  return tilesForBounds(box).some(id => !tileCache.has(id));
+}
+function scheduleViewportSync() {
+  if (!map || state.bbox || state.selecting || drawing) return;
+  if (map.getZoom() < 5) return;
+  clearTimeout(viewportSyncTimer);
+  viewportSyncTimer = setTimeout(flushViewportSync, 50);
+}
+async function flushViewportSync() {
+  if (!map || state.bbox || state.selecting || drawing) return;
+  if (map.getZoom() < 5) return;
+  if (rendering) {
+    viewportSyncQueued = true;
+    return;
+  }
+  viewportSyncQueued = false;
+  const box = mapViewportBox(0.12);
+  const missing = viewportTilesMissing(box);
+  const track = job;
+  if (missing) await ensureTiles(box);
+  if (track !== job || state.bbox) return;
+  if (!state.area && map.getZoom() >= 5) render();
+  else if (missing && state.area) render();
+}
+map.on("zoomend", () => { syncCellPane(); scheduleViewportSync(); });
 
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = function () {
@@ -961,6 +988,17 @@ function unpack(data) {
 function inDrawnBox(p) {
   return !state.bbox || inside(p, state.bbox);
 }
+function mapViewportBox(padFrac) {
+  if (!map) return null;
+  const b = padFrac ? map.getBounds().pad(padFrac) : map.getBounds();
+  return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+}
+function fineViewportCells() {
+  if (!map || map.getZoom() < 5) return null;
+  const box = mapViewportBox(0.08);
+  const cells = cellsInTiles(box).filter(p => inside(p, box));
+  return cells.length ? cells : null;
+}
 function worldPoints() {
   if (!overviewPts) return [];
   if (state.area && state.area.geometry) {
@@ -973,6 +1011,8 @@ function worldPoints() {
     if (fine.length) return fine;
     return overviewPts.filter(p => inside(p, state.bbox));
   }
+  const fine = fineViewportCells();
+  if (fine) return fine;
   return overviewPts;
 }
 function listRows() {
@@ -1166,12 +1206,8 @@ function renderLegend(rows) {
 function rowsToDraw(list) {
   if (!list.length) return [];
   if (state.area || state.bbox) return list;
-  if (map.getZoom() >= 5) {
-    const b = map.getBounds();
-    const box = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-    const cells = cellsInTiles(box).filter(p => inside(p, box));
-    if (cells.length) return scoredSet(cells, list.scale);
-  }
+  const fine = fineViewportCells();
+  if (fine) return scoredSet(fine, list.scale);
   const b = map.getBounds().pad(0.15);
   return list.filter(p => inside(p, [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]));
 }
@@ -1298,6 +1334,7 @@ function render() {
   } finally {
     rendering = false;
     flushUrl();
+    if (viewportSyncQueued) scheduleViewportSync();
   }
 }
 function openRow(row, list) {
@@ -1931,18 +1968,7 @@ surface.addEventListener("touchend", (ev) => {
 });
 map.on("moveend", () => {
   if (shareReady && !rendering) flushUrl();
-});
-map.on("moveend", () => {
-  if (rendering || state.area || state.bbox || map.getZoom() < 5) return;
-  const b = map.getBounds();
-  const box = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-  const missing = tilesForBounds(box).some(id => !tileCache.has(id));
-  if (!missing) return;
-  const mine = job;
-  ensureTiles(box).then(() => {
-    if (mine !== job || state.area || state.bbox) return;
-    render();
-  });
+  scheduleViewportSync();
 });
 
 document.getElementById("board-toggle").onclick = () => {
