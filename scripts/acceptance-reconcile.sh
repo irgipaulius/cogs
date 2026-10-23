@@ -18,6 +18,9 @@ ensure_acceptance_cookie() {
   if [[ -n "$COOKIE" ]]; then
     return 0
   fi
+  if acceptance_load_loopback_token "$ROOT"; then
+    return 0
+  fi
   acceptance_load_admin_credentials "$ROOT" || true
   local user pass
   user="${COGS_ACCEPTANCE_ADMIN_USER:-}"
@@ -88,12 +91,7 @@ echo "CoGS acceptance-reconcile (ROOT=$ROOT ADMIN=$ADMIN PUBLIC=${PUBLIC_ADMIN:-
 echo "===================================================="
 
 if ! ensure_acceptance_cookie; then
-  fail "acceptance auth — set COGS_ADMIN_COOKIE, COGS_ACCEPTANCE_ADMIN_*, or apps/admin/.env on loopback"
-fi
-
-if [[ -z "${COGS_ACCEPTANCE_FULL:-}" && -n "$COOKIE" && -f "$ROOT/apps/admin/.env" ]] && acceptance_admin_is_loopback "$ADMIN"; then
-  COGS_ACCEPTANCE_FULL=1
-  export COGS_ACCEPTANCE_FULL
+  fail "acceptance auth — set COGS_ADMIN_COOKIE, use loopback acceptance.token (cogs up), or COGS_ACCEPTANCE_ADMIN_*"
 fi
 
 curl_api() {

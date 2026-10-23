@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/irgipaulius/cogs/internal/cli/ux"
+	"github.com/irgipaulius/cogs/pkg/acceptance"
 	"github.com/irgipaulius/cogs/pkg/boot"
 	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/reconcile"
@@ -117,6 +118,9 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	boot.LoadUpEnvIntoProcess(root)
 	_ = os.Setenv("COGS_WORKSPACE_ROOT", root)
 	cftoken.MaintainWranglerOAuth()
+	if _, err := acceptance.EnsureToken(root); err != nil {
+		log.Printf("acceptance token: %v", err)
+	}
 	attachUpLog(root)
 	defer closeUpLog()
 	_ = os.WriteFile(upPIDPath(root), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644)

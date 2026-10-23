@@ -28,13 +28,12 @@ fi
 
 ADMIN="http://127.0.0.1:18786"
 root="$tmp"
-mkdir -p "$root/apps/admin"
-printf 'COGS_ADMIN_USER=root\nCOGS_ADMIN_PASSWORD=secret\n' > "$root/apps/admin/.env"
-if acceptance_load_admin_credentials "$root"; then
-  [[ "$COGS_ACCEPTANCE_ADMIN_USER" == "root" ]] || exit 1
-else
-  echo "load creds failed"
+mkdir -p "$root/.cogs/run"
+printf 'abc123token\n' > "$root/.cogs/run/acceptance.token"
+if ! acceptance_load_loopback_token "$root"; then
+  echo "load loopback token failed"
   exit 1
 fi
+[[ "$COOKIE" == *"abc123token"* ]] || { echo "bad cookie $COOKIE"; exit 1; }
 
 echo "acceptance-selftest ok"

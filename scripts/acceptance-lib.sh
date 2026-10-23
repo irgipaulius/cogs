@@ -23,8 +23,25 @@ acceptance_admin_is_loopback() {
   [[ "$url" =~ ^https?://(127\.0\.0\.1|localhost|\[::1\])(:[0-9]+)?(/|$) ]]
 }
 
+acceptance_load_loopback_token() {
+  local root=${1:-}
+  [[ -n "$root" ]] || return 1
+  acceptance_admin_is_loopback "${ADMIN:-}" || return 1
+  local tf="$root/.cogs/run/acceptance.token"
+  [[ -f "$tf" ]] || return 1
+  local tok
+  tok=$(tr -d ' \n' < "$tf")
+  [[ -n "$tok" ]] || return 1
+  COOKIE="${COGS_ACCEPTANCE_COOKIE:-cogs_acceptance_admin=${tok}}"
+  export COOKIE
+  return 0
+}
+
 acceptance_load_admin_credentials() {
   local root=${1:-}
+  if acceptance_load_loopback_token "$root"; then
+    return 0
+  fi
   [[ -n "${COGS_ADMIN_COOKIE:-}" || -n "${COGS_ACCEPTANCE_ADMIN_USER:-}" ]] && return 0
   [[ -n "$root" ]] || return 1
   local envf="$root/apps/admin/.env"

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/irgipaulius/cogs/pkg/acceptance"
 	"github.com/irgipaulius/cogs/pkg/adminstore"
 	"github.com/irgipaulius/cogs/pkg/ghcli"
 	"github.com/irgipaulius/cogs/pkg/reconcile"
@@ -70,6 +71,12 @@ type authed func(http.ResponseWriter, *http.Request, *adminstore.EffectiveUser)
 
 func (s *Server) auth(next authed) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if s.WorkspaceRoot != "" {
+			if user, ok := acceptance.RootUserIfAccepted(s.WorkspaceRoot, r); ok {
+				next(w, r, user)
+				return
+			}
+		}
 		sid := sessionFromRequest(r)
 		user, err := s.Store.ResolveSession(r.Context(), sid)
 		if err != nil {
