@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/irgipaulius/cogs/pkg/cfclient"
@@ -17,35 +16,6 @@ import (
 type ingressRule struct {
 	Hostname string `json:"hostname,omitempty"`
 	Service  string `json:"service"`
-}
-
-func findTunnelID(ctx context.Context, c *cfclient.Client, accountID, name string) (string, error) {
-	q := url.Values{}
-	q.Set("name", name)
-	q.Set("is_deleted", "false")
-	apiURL := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/cfd_tunnel?%s", accountID, q.Encode())
-	out, err := c.Do(ctx, cftoken.ScopeAPI, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return "", err
-	}
-	var tl struct {
-		Result []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(out.Result, &tl.Result); err != nil {
-		return "", err
-	}
-	for _, t := range tl.Result {
-		if t.Name == name {
-			return t.ID, nil
-		}
-	}
-	if len(tl.Result) == 1 {
-		return tl.Result[0].ID, nil
-	}
-	return "", fmt.Errorf("tunnel %q not found", name)
 }
 
 func ensureTunnelIngress(ctx context.Context, c *cfclient.Client, accountID, tunnelID, hostname, localService string) error {

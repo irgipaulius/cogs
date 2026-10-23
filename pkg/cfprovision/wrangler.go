@@ -2,26 +2,10 @@ package cfprovision
 
 import (
 	"bytes"
-	"fmt"
-	"os/exec"
 	"strings"
 
-	"github.com/irgipaulius/cogs/pkg/hostenv"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
-
-func wranglerCmd(wsRoot string, args ...string) (*exec.Cmd, error) {
-	if p, err := exec.LookPath("wrangler"); err == nil {
-		cmd := exec.Command(p, args...)
-		cmd.Env = hostenv.CLIEnv(wsRoot)
-		return cmd, nil
-	}
-	if _, err := exec.LookPath("npx"); err != nil {
-		return nil, fmt.Errorf("wrangler not found; install: npm i -g wrangler")
-	}
-	cmd := exec.Command("npx", append([]string{"wrangler"}, args...)...)
-	cmd.Env = hostenv.CLIEnv(wsRoot)
-	return cmd, nil
-}
 
 func wranglerTryCreate(wsRoot string, args ...string) error {
 	out, err := wranglerCaptureBoth(wsRoot, args...)
@@ -31,11 +15,11 @@ func wranglerTryCreate(wsRoot string, args ...string) error {
 	if wranglerErrorBenign(out) {
 		return nil
 	}
-	return fmt.Errorf("wrangler %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	return err
 }
 
 func wranglerCaptureBoth(wsRoot string, args ...string) ([]byte, error) {
-	cmd, err := wranglerCmd(wsRoot, args...)
+	cmd, err := wranglerexec.Command(wsRoot, args...)
 	if err != nil {
 		return nil, err
 	}

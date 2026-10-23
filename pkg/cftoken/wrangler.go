@@ -3,28 +3,25 @@ package cftoken
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
-	"strings"
 
-	"github.com/irgipaulius/cogs/pkg/hostenv"
+	"github.com/irgipaulius/cogs/pkg/wranglerpaths"
 )
 
-// WranglerConfigPath returns wrangler default.toml on this host.
+// WranglerConfigPath returns wrangler default.toml (wrangler 4 resolution order).
 func WranglerConfigPath() (string, error) {
-	return wranglerConfigPath()
+	return wranglerpaths.ConfigDefaultTOML()
 }
 
-// WranglerOAuthToken reads the OAuth token from wrangler's config on the host.
+// WranglerOAuthToken reads oauth/api token from the config path wrangler would use.
 func WranglerOAuthToken() (string, error) {
-	path, err := wranglerConfigPath()
+	path, err := WranglerConfigPath()
 	if err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read wrangler config: %w", err)
+		return "", fmt.Errorf("read wrangler config %s: %w", path, err)
 	}
 	re := regexp.MustCompile(`(?m)^oauth_token\s*=\s*"([^"]+)"`)
 	m := re.FindSubmatch(b)
@@ -33,28 +30,7 @@ func WranglerOAuthToken() (string, error) {
 		m = re2.FindSubmatch(b)
 	}
 	if len(m) < 2 {
-		return "", fmt.Errorf("no oauth_token in %s; run wrangler login", path)
+		return "", fmt.Errorf("no oauth_token in %s", path)
 	}
 	return string(m[1]), nil
-}
-
-func wranglerConfigPath() (string, error) {
-	if h := strings.TrimSpace(os.Getenv("WRANGLER_HOME")); h != "" {
-		return filepath.Join(h, "config", "default.toml"), nil
-	}
-	home := hostenv.ServiceHome()
-	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-	}
-	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Preferences", ".wrangler", "config", "default.toml"), nil
-	}
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, ".wrangler", "config", "default.toml"), nil
-	}
-	return filepath.Join(home, ".config", ".wrangler", "config", "default.toml"), nil
 }

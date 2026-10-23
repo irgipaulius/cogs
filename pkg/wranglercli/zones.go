@@ -7,9 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"regexp"
-	"runtime"
+	"strings"
+
+	"github.com/irgipaulius/cogs/pkg/cftoken"
 )
 
 // Zone is a Cloudflare DNS zone on the logged-in account.
@@ -26,22 +26,28 @@ type zonesResponse struct {
 	} `json:"errors"`
 }
 
-// ListZones returns zones for the wrangler OAuth account (empty if not logged in).
+// ListZones returns zones for the API token account (empty if not logged in).
 func ListZones(ctx context.Context) ([]Zone, error) {
-	st, err := Status(ctx)
-	if err != nil || !st.LoggedIn || st.AccountID == "" {
+	wsRoot := strings.TrimSpace(os.Getenv("COGS_WORKSPACE_ROOT"))
+	res := cftoken.Resolver{WSRoot: wsRoot, OAuth: cftoken.WranglerOAuthToken}
+	tok, err := res.For(ctx, cftoken.ScopeAPI)
+	if err != nil {
 		return nil, nil
 	}
-	token, err := oauthTokenFromConfig()
-	if err != nil {
-		return nil, err
+	accountID := strings.TrimSpace(os.Getenv("COGS_CF_ACCOUNT_ID"))
+	if accountID == "" {
+		st, _ := Status(ctx)
+		accountID = st.AccountID
 	}
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones?account.id=%s&per_page=50", st.AccountID)
+	if accountID == "" {
+		return nil, nil
+	}
+	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones?account.id=%s&per_page=50", accountID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+tok)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -63,46 +69,4 @@ func ListZones(ctx context.Context) ([]Zone, error) {
 		return nil, fmt.Errorf("%s", msg)
 	}
 	return zr.Result, nil
-}
-
-func oauthTokenFromConfig() (string, error) {
-	path, err := wranglerConfigPath()
-	if err != nil {
-		return "", err
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read wrangler config: %w", err)
-	}
-	re := regexp.MustCompile(`(?m)^oauth_token\s*=\s*"([^"]+)"`)
-	m := re.FindSubmatch(b)
-	if len(m) < 2 {
-		re2 := regexp.MustCompile(`(?m)^api_token\s*=\s*"([^"]+)"`)
-		m = re2.FindSubmatch(b)
-	}
-	if len(m) < 2 {
-		return "", fmt.Errorf("no oauth_token; run wrangler login")
-	}
-	return string(m[1]), nil
-}
-
-func wranglerConfigPath() (string, error) {
-	if h := os.Getenv("WRANGLER_HOME"); h != "" {
-		return filepath.Join(h, "config", "default.toml"), nil
-	}
-	if runtime.GOOS == "darwin" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(home, "Library", "Preferences", ".wrangler", "config", "default.toml"), nil
-	}
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, ".wrangler", "config", "default.toml"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".config", ".wrangler", "config", "default.toml"), nil
 }

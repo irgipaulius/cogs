@@ -166,7 +166,7 @@ func findTunnelIDAPI(accountID, token, name string) (string, error) {
 }
 
 func findTunnelIDWranglerCLI(name string) (string, error) {
-	out, err := wranglerCaptureQuiet("tunnel", "list")
+	out, err := wranglerCaptureQuiet(cliWSRoot(), "tunnel", "list")
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +227,8 @@ func mergeIngress(existing []ingressRule, hostname, service string) []ingressRul
 }
 
 func tunnelFix(projectDir string) error {
-	if err := ensureWranglerLogin(); err != nil {
+	root, _, _ := workspace.FindRoot(projectDir)
+	if err := ensureWranglerLogin(root); err != nil {
 		return err
 	}
 	m, err := launch.Load(projectDir)

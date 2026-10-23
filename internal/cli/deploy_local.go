@@ -62,7 +62,7 @@ func cmdDeployWorkspace(args []string) error {
 	}
 
 	if !opts.quick {
-		if err := ensureWranglerLogin(); err != nil {
+		if err := ensureWranglerLogin(rootDir); err != nil {
 			return err
 		}
 	}

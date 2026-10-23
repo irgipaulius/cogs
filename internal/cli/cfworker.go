@@ -9,6 +9,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workerwrangler"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func deployWorkerStaticAssets(projectDir, pageHost string, m launch.Manifest) error {
@@ -40,7 +41,8 @@ func deployWorkerStaticAssets(projectDir, pageHost string, m launch.Manifest) er
 }
 
 func wranglerInDir(dir string, args ...string) error {
-	cmd, err := wranglerCmd(args...)
+	wsRoot, _, _ := workspace.FindRoot(dir)
+	cmd, err := wranglerCmd(wsRoot, args...)
 	if err != nil {
 		return err
 	}

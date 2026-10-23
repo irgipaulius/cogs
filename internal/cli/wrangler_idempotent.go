@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// wranglerTryCreate runs wrangler; treats "already exists" style errors as success.
-func wranglerTryCreate(args ...string) error {
-	out, err := wranglerCaptureBoth(args...)
+func wranglerTryCreate(wsRoot string, args ...string) error {
+	out, err := wranglerCaptureBoth(wsRoot, args...)
 	if err == nil {
 		return nil
 	}
@@ -19,16 +18,16 @@ func wranglerTryCreate(args ...string) error {
 	return err
 }
 
-func wranglerCaptureQuiet(args ...string) (string, error) {
-	out, err := wranglerCaptureBoth(args...)
+func wranglerCaptureQuiet(wsRoot string, args ...string) (string, error) {
+	out, err := wranglerCaptureBoth(wsRoot, args...)
 	if err != nil && !wranglerErrorBenign(out) {
 		return string(out), err
 	}
 	return string(out), nil
 }
 
-func wranglerCaptureBoth(args ...string) ([]byte, error) {
-	cmd, err := wranglerCmd(args...)
+func wranglerCaptureBoth(wsRoot string, args ...string) ([]byte, error) {
+	cmd, err := wranglerCmd(wsRoot, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -44,10 +43,9 @@ func wranglerErrorBenign(out []byte) bool {
 	phrases := []string{
 		"already exists",
 		"already have a tunnel",
-		"a project with this name already exists",
+		"a project with this name already pages",
 		"database with that name already exists",
 		"bucket you tried to create already exists",
-		"you own it",
 	}
 	for _, p := range phrases {
 		if strings.Contains(s, p) {

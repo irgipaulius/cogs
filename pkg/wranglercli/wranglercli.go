@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/irgipaulius/cogs/pkg/hostenv"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
 
 // AuthStatus is wrangler authentication on this host.
@@ -30,25 +30,15 @@ type whoamiJSON struct {
 	} `json:"accounts"`
 }
 
-func wranglerCmd(args ...string) (*exec.Cmd, error) {
-	if p, err := exec.LookPath("wrangler"); err == nil {
-		return exec.Command(p, args...), nil
-	}
-	if _, err := exec.LookPath("npx"); err != nil {
-		return nil, fmt.Errorf("wrangler not found; run: npm i -g wrangler && wrangler login")
-	}
-	return exec.Command("npx", append([]string{"wrangler"}, args...)...), nil
-}
-
 func run(ctx context.Context, args ...string) (string, error) {
-	cmd, err := wranglerCmd(args...)
+	wsRoot := strings.TrimSpace(os.Getenv("COGS_WORKSPACE_ROOT"))
+	cmd, err := wranglerexec.Command(wsRoot, args...)
 	if err != nil {
 		return "", err
 	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	cmd.Env = hostenv.CLIEnv(os.Getenv("COGS_WORKSPACE_ROOT"))
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("%s", strings.TrimSpace(out.String()))
 	}

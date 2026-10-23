@@ -34,9 +34,10 @@ func runLaunch(flags launchFlags) error {
 		return fmt.Errorf("launch: %w", err)
 	}
 	resolveListen(abs, &m)
+	wsRoot, _, _ := workspace.FindRoot(abs)
 
 	if !flags.quick {
-		if err := ensureWranglerLogin(); err != nil {
+		if err := ensureWranglerLogin(wsRoot); err != nil {
 			return err
 		}
 	}
@@ -146,18 +147,18 @@ func runLaunch(flags launchFlags) error {
 
 	if !flags.quick && !m.IsCombined() {
 		fmt.Println("\n→ Cloudflare D1 (edge read replica)")
-		_ = wranglerTryCreate("d1", "create", m.D1Name)
+		_ = wranglerTryCreate(wsRoot, "d1", "create", m.D1Name)
 
 		if m.Attachments && m.R2Bucket != "" {
 			fmt.Println("→ R2 bucket (optional — edge sync via cogs sync; local COGS_BLOB_DIR by default)")
-			_ = wranglerTryCreate("r2", "bucket", "create", m.R2Bucket)
+			_ = wranglerTryCreate(wsRoot, "r2", "bucket", "create", m.R2Bucket)
 		}
 	}
 
 	if !flags.quick {
 		if !flags.skipTunnel {
 			fmt.Println("→ Tunnel (create + ingress + API DNS)")
-			_ = wranglerTryCreate("tunnel", "create", m.TunnelName)
+			_ = wranglerTryCreate(wsRoot, "tunnel", "create", m.TunnelName)
 		}
 	}
 

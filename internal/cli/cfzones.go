@@ -1,15 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
+	"github.com/irgipaulius/cogs/pkg/cfclient"
 	"github.com/irgipaulius/cogs/pkg/cftoken"
 )
 
@@ -24,12 +23,6 @@ type zonesResponse struct {
 	Errors  []struct {
 		Message string `json:"message"`
 	} `json:"errors"`
-}
-
-type whoamiJSON struct {
-	Accounts []struct {
-		ID string `json:"id"`
-	} `json:"accounts"`
 }
 
 // onlyCloudflareZone returns the sole zone on the account. More than one zone needs cogs.app.toml.
@@ -101,16 +94,14 @@ CoGS will create:
 }
 
 func fetchCloudflareZones() ([]zoneEntry, error) {
-	whoami, err := wranglerCapture("whoami", "--json")
+	root := cliWSRoot()
+	c := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
+	ctx := context.Background()
+	token, err := c.Token(ctx, cftoken.ScopeAPI)
 	if err != nil {
 		return nil, err
 	}
-	var w whoamiJSON
-	if err := json.Unmarshal([]byte(whoami), &w); err != nil || len(w.Accounts) == 0 {
-		return nil, fmt.Errorf("parse whoami")
-	}
-	accountID := w.Accounts[0].ID
-	token, err := wranglerOAuthToken()
+	accountID, err := c.AccountID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,25 +136,4 @@ func fetchCloudflareZones() ([]zoneEntry, error) {
 
 func wranglerOAuthToken() (string, error) {
 	return cftoken.WranglerOAuthToken()
-}
-
-func wranglerConfigPath() (string, error) {
-	if h := os.Getenv("WRANGLER_HOME"); h != "" {
-		return filepath.Join(h, "config", "default.toml"), nil
-	}
-	if runtime.GOOS == "darwin" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(home, "Library", "Preferences", ".wrangler", "config", "default.toml"), nil
-	}
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, ".wrangler", "config", "default.toml"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".config", ".wrangler", "config", "default.toml"), nil
 }

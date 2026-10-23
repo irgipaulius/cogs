@@ -13,9 +13,10 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/cfclient"
 	"github.com/irgipaulius/cogs/pkg/cftoken"
-	"github.com/irgipaulius/cogs/pkg/hostenv"
+	"github.com/irgipaulius/cogs/pkg/cftunnel"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workspace"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
 
 func tunnelRunDir(projectDir string) string {
@@ -67,6 +68,7 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 		if !quiet {
 			fmt.Printf("Tunnel %q already running (pid %d)\n", name, pid)
 		}
+		upGate.clearAuthFailure(key)
 		return nil
 	}
 	if holder, pid, held := tunnelHeldByOtherApp(projectDir, name); held {
@@ -75,40 +77,56 @@ func startTunnelBg(projectDir, name string, quiet bool) error {
 	root, _, _ := workspace.FindRoot(projectDir)
 	c := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
 	ctx := context.Background()
-	tok, err := c.Token(ctx, cftoken.ScopeAPI)
+	if _, err := c.Token(ctx, cftoken.ScopeAPI); err != nil {
+		upGate.recordAuthFailure(key, err.Error())
+		return fmt.Errorf("Cloudflare auth missing: %w", err)
+	}
+	accountID, err := c.AccountID(ctx)
 	if err != nil {
 		upGate.recordAuthFailure(key, err.Error())
 		return fmt.Errorf("Cloudflare auth missing: %w", err)
+	}
+	tunnelID, err := cftunnel.FindID(ctx, c, accountID, name)
+	if err != nil {
+		upGate.recordTunnelFailure(key, err.Error())
+		return err
+	}
+	runTok, err := cftunnel.RunToken(ctx, c, accountID, tunnelID)
+	if err != nil {
+		upGate.recordTunnelFailure(key, err.Error())
+		return err
 	}
 	if err := os.MkdirAll(tunnelRunDir(projectDir), 0o755); err != nil {
 		return err
 	}
 	logPath := tunnelLogPath(projectDir, name)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	cmd, err := cftunnel.StartCloudflared(runTok, logPath)
 	if err != nil {
-		return err
+		cmd, err = wranglerexec.Command(root, "tunnel", "run", name)
+		if err != nil {
+			upGate.recordTunnelFailure(key, err.Error())
+			return err
+		}
+		logFile, oerr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if oerr != nil {
+			return oerr
+		}
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
 	}
-	cmd, err := wranglerCmd("tunnel", "run", name)
-	if err != nil {
-		logFile.Close()
-		return err
-	}
-	cmd.Env = append(hostenv.CLIEnv(root), "CLOUDFLARE_API_TOKEN="+tok)
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
-		upGate.recordFailure(key, err.Error())
+		upGate.recordTunnelFailure(key, err.Error())
 		return err
 	}
-	_ = logFile.Close()
+	_, _ = cftunnel.WriteTokenFile(tunnelRunDir(projectDir), name, runTok)
 	pidPath := tunnelPIDPath(projectDir, name)
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
 		_ = cmd.Process.Kill()
 		return err
 	}
+	upGate.clearAuthFailure(key)
 	if !quiet {
 		fmt.Printf("Tunnel %q started in background (pid %d)\n", name, cmd.Process.Pid)
 		fmt.Printf("  log: %s\n", logPath)
@@ -215,17 +233,34 @@ func tunnelRunForeground(name string) error {
 	wd, _ := os.Getwd()
 	root, _, _ := workspace.FindRoot(wd)
 	c := &cfclient.Client{WSRoot: root, OAuth: wranglerOAuthToken}
-	tok, err := c.Token(context.Background(), cftoken.ScopeAPI)
+	ctx := context.Background()
+	if _, err := c.Token(ctx, cftoken.ScopeAPI); err != nil {
+		return fmt.Errorf("Cloudflare auth missing: %w", err)
+	}
+	accountID, err := c.AccountID(ctx)
 	if err != nil {
 		return err
 	}
-	cmd, err := wranglerCmd("tunnel", "run", name)
+	tunnelID, err := cftunnel.FindID(ctx, c, accountID, name)
 	if err != nil {
 		return err
 	}
-	cmd.Env = append(hostenv.CLIEnv(root), "CLOUDFLARE_API_TOKEN="+tok)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	runTok, err := cftunnel.RunToken(ctx, c, accountID, tunnelID)
+	if err != nil {
+		return err
+	}
+	cmd, err := cftunnel.StartCloudflared(runTok, "")
+	if err != nil {
+		cmd, err = wranglerexec.Command(root, "tunnel", "run", name)
+		if err != nil {
+			return err
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 	cmd.Stdin = os.Stdin
 	fmt.Printf("Running: %s\n", formatWranglerCmd(cmd))
 	return cmd.Run()

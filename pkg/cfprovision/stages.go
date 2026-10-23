@@ -8,6 +8,7 @@ import (
 
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/cfclient"
+	"github.com/irgipaulius/cogs/pkg/cftunnel"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/state"
 )
@@ -58,7 +59,7 @@ func EnsureTunnel(ctx context.Context, cfg Config, st *state.Store, app state.Ap
 	if err := wranglerTryCreate(st.WSRoot(), "tunnel", "create", tunnelName); err != nil {
 		return "", fmt.Errorf("tunnel create: %w", err)
 	}
-	tunnelID, err = findTunnelID(ctx, cfg.Client, accountID, tunnelName)
+	tunnelID, err = cftunnel.FindID(ctx, cfg.Client, accountID, tunnelName)
 	if err != nil {
 		return "", err
 	}

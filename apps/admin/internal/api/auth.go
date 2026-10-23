@@ -43,8 +43,20 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request, user *
 	if msg, _ := cfAuth["message"].(string); msg != "" {
 		cfMap["auth_message"] = msg
 	}
+	if v, _ := cfAuth["auth_missing"].(bool); v {
+		cfMap["auth_missing"] = true
+	}
+	if v, _ := cfAuth["wrangler_legacy_shadow"].(bool); v {
+		cfMap["wrangler_legacy_shadow"] = true
+	}
+	if msg, _ := cfAuth["shadow_message"].(string); msg != "" {
+		cfMap["shadow_message"] = msg
+	}
 	if id, _ := cfAuth["account_id"].(string); id != "" {
 		cfMap["account_id"] = id
+	}
+	if alerts, ok := cfAuth["supervisor_alerts"]; ok {
+		cfMap["supervisor_alerts"] = alerts
 	}
 	writeJSON(w, map[string]any{
 		"github":     gh,

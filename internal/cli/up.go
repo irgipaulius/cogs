@@ -112,6 +112,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 	if err := writeBootScript(root); err != nil {
 		return err
 	}
+	gcWranglerLogs()
 	boot.LoadUpEnvIntoProcess(root)
 	attachUpLog(root)
 	defer closeUpLog()
@@ -151,18 +152,15 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 			if noTunnel {
 				continue
 			}
+			tKey := "tunnel:" + a.Name
 			if err := startTunnelBackgroundQuiet(dir, ""); err != nil {
 				msg := err.Error()
-				if strings.Contains(msg, "Cloudflare auth") {
-					upGate.recordAuthFailure("tunnel:"+a.Name, msg)
-				} else {
-					upGate.recordFailure(a.Name, msg)
-				}
-				if !quiet && upGate.shouldLog(a.Name, msg) {
+				if !quiet && upGate.shouldLog(tKey, msg) {
 					log.Print(a.Name + " tunnel: " + msg)
 				}
 			}
 		}
+		upGate.writeAlerts(root)
 		if st != nil && rec != nil {
 			views, err := st.ListApps()
 			if err == nil && len(views) == 0 && len(ws.Apps) > 0 {

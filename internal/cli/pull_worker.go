@@ -8,6 +8,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appbuild"
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/workerwrangler"
+	"github.com/irgipaulius/cogs/pkg/workspace"
 )
 
 func deployPullWorkerUI(projectDir, pageHost, apiHost string) error {
@@ -37,12 +38,13 @@ func deployPullWorkerUI(projectDir, pageHost, apiHost string) error {
 	if err != nil {
 		return err
 	}
-	cmd, err := wranglerCmd("deploy")
+	wsRoot, _, _ := workspace.FindRoot(projectDir)
+	cmd, err := wranglerCmd(wsRoot, "deploy")
 	if err != nil {
 		return err
 	}
 	cmd.Dir = genDir
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(cmd.Env, env...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

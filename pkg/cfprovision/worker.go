@@ -9,6 +9,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/appcfg"
 	"github.com/irgipaulius/cogs/pkg/launch"
 	"github.com/irgipaulius/cogs/pkg/workerwrangler"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
 
 // DeployWorker builds frontend and deploys the generated Worker (custom domain routes).
@@ -31,7 +32,7 @@ func DeployWorker(wsRoot, appDir, pageHost string, m launch.Manifest) (workerNam
 	if err != nil {
 		return "", err
 	}
-	cmd, err := wranglerCmd(wsRoot, "deploy")
+	cmd, err := wranglerexec.Command(wsRoot, "deploy")
 	if err != nil {
 		return "", err
 	}

@@ -26,7 +26,7 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
   const gh = authStatus?.github;
   const cf = authStatus?.cloudflare;
   const ghReady = !!gh?.logged_in;
-  const cfReady = !!cf?.logged_in;
+  const cfReady = !!(cf?.api_token_ok || cf?.logged_in);
 
   const canInstall = preview?.state === 'ready' && REPO_PATTERN.test(repo.trim());
 
@@ -251,9 +251,15 @@ export function AddAppModal({ open, onClose, api, onAdded, authStatus }) {
             GitHub: {ghReady ? gh.login || 'connected' : 'optional (public repos)'}
           </span>
           <span className={cfReady ? 'host-auth-ok' : 'host-auth-warn'}>
-            Cloudflare: {cfReady ? cf.email || cf.account_name || 'connected' : 'needed at launch'}
+            Cloudflare:{' '}
+            {cfReady
+              ? cf.email || cf.account_name || 'API token OK'
+              : cf?.auth_message || 'Cloudflare auth missing — set COGS_CF_API_TOKEN'}
           </span>
         </div>
+        {cf?.shadow_message && (
+          <p className="host-auth-warn modal-shadow-warn">{cf.shadow_message}</p>
+        )}
 
         {err && <div className="err modal-err">{err}</div>}
         {done && (

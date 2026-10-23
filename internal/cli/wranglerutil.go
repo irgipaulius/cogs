@@ -5,10 +5,25 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/irgipaulius/cogs/pkg/workspace"
+	"github.com/irgipaulius/cogs/pkg/wranglerexec"
 )
 
-func wranglerCapture(args ...string) (string, error) {
-	cmd, err := wranglerCmd(args...)
+func cliWSRoot() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	root, _, err := workspace.FindRoot(wd)
+	if err != nil {
+		return wd
+	}
+	return root
+}
+
+func wranglerCapture(wsRoot string, args ...string) (string, error) {
+	cmd, err := wranglerCmd(wsRoot, args...)
 	if err != nil {
 		return "", err
 	}
@@ -21,31 +36,34 @@ func wranglerCapture(args ...string) (string, error) {
 	return out.String(), nil
 }
 
-func wranglerCmd(args ...string) (*exec.Cmd, error) {
-	if p, err := exec.LookPath("wrangler"); err == nil {
-		return exec.Command(p, args...), nil
+func wranglerCmd(wsRoot string, args ...string) (*exec.Cmd, error) {
+	if wsRoot == "" {
+		wsRoot = cliWSRoot()
 	}
-	if _, err := exec.LookPath("npx"); err != nil {
-		return nil, fmt.Errorf("wrangler not found; install: npm i -g wrangler")
-	}
-	return exec.Command("npx", append([]string{"wrangler"}, args...)...), nil
+	return wranglerexec.Command(wsRoot, args...)
 }
 
-func ensureWranglerLogin() error {
-	_, err := wranglerCapture("whoami")
+func ensureWranglerLogin(wsRoot string) error {
+	if wsRoot == "" {
+		wsRoot = cliWSRoot()
+	}
+	_, err := wranglerCapture(wsRoot, "whoami")
 	if err == nil {
 		return nil
 	}
-	fmt.Println("Wrangler is not authenticated. Opening browser login…")
-	if err := wrangler("login"); err != nil {
+	fmt.Println("Set COGS_CF_API_TOKEN or run wrangler login…")
+	if err := wrangler(wsRoot, "login"); err != nil {
 		return fmt.Errorf("wrangler login: %w", err)
 	}
-	_, err = wranglerCapture("whoami")
+	_, err = wranglerCapture(wsRoot, "whoami")
 	return err
 }
 
-func wrangler(args ...string) error {
-	cmd, err := wranglerCmd(args...)
+func wrangler(wsRoot string, args ...string) error {
+	if wsRoot == "" {
+		wsRoot = cliWSRoot()
+	}
+	cmd, err := wranglerCmd(wsRoot, args...)
 	if err != nil {
 		return err
 	}

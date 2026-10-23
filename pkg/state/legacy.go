@@ -28,15 +28,18 @@ type wsApp struct {
 
 func importLegacyOnce(s *Store) error {
 	marker := filepath.Join(s.wsRoot, ".cogs", "legacy-imported")
-	if _, err := os.Stat(marker); err == nil {
+	_, markerErr := os.Stat(marker)
+	markerExists := markerErr == nil
+	count, _ := s.countApps()
+	ws, wsErr := loadWorkspaceManifest(s.wsRoot)
+	if wsErr != nil && !os.IsNotExist(wsErr) {
+		return fmt.Errorf("legacy import workspace: %w", wsErr)
+	}
+	needImport := count == 0 && len(ws.Apps) > 0
+	if !needImport && markerExists {
 		return nil
 	}
-	count, _ := s.countApps()
-	if count == 0 {
-		ws, err := loadWorkspaceManifest(s.wsRoot)
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("legacy import workspace: %w", err)
-		}
+	if needImport {
 		if err := importWorkspaceApps(s, ws); err != nil {
 			return err
 		}

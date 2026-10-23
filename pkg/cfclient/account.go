@@ -14,6 +14,7 @@ import (
 	"github.com/irgipaulius/cogs/pkg/cftoken"
 	"github.com/irgipaulius/cogs/pkg/hostenv"
 	"github.com/irgipaulius/cogs/pkg/wranglercli"
+	"github.com/irgipaulius/cogs/pkg/wranglerpaths"
 )
 
 const accountIDFile = ".cogs/cloudflare/account_id"
@@ -32,6 +33,22 @@ func (c *Client) AccountID(ctx context.Context) (string, error) {
 			return id, nil
 		}
 	}
+	if id, err := accountIDFromWranglerConfig(); err == nil && id != "" {
+		if c.WSRoot != "" {
+			_ = storeAccountID(c.WSRoot, id)
+		}
+		return id, nil
+	}
+	tok, err := c.Token(ctx, cftoken.ScopeAPI)
+	if err != nil {
+		return "", fmt.Errorf("cloudflare account: %w", err)
+	}
+	if id, err := accountIDFromToken(ctx, tok); err == nil && id != "" {
+		if c.WSRoot != "" {
+			_ = storeAccountID(c.WSRoot, id)
+		}
+		return id, nil
+	}
 	if c.WSRoot != "" {
 		_ = os.Setenv("COGS_WORKSPACE_ROOT", c.WSRoot)
 	}
@@ -42,27 +59,7 @@ func (c *Client) AccountID(ctx context.Context) (string, error) {
 		}
 		return id, nil
 	}
-	if id, err := accountIDFromWranglerConfig(); err == nil && id != "" {
-		if c.WSRoot != "" {
-			_ = storeAccountID(c.WSRoot, id)
-		}
-		return id, nil
-	}
-	if c.WSRoot != "" {
-		_ = os.Setenv("COGS_WORKSPACE_ROOT", c.WSRoot)
-	}
-	tok, err := c.Token(ctx, cftoken.ScopeAPI)
-	if err != nil {
-		return "", fmt.Errorf("cloudflare account: %w", err)
-	}
-	id, err := accountIDFromToken(ctx, tok)
-	if err != nil {
-		return "", err
-	}
-	if c.WSRoot != "" {
-		_ = storeAccountID(c.WSRoot, id)
-	}
-	return id, nil
+	return "", fmt.Errorf("no Cloudflare account id (set COGS_CF_ACCOUNT_ID or use a token with Account read)")
 }
 
 func accountIDFromToken(ctx context.Context, tok string) (string, error) {
@@ -92,21 +89,6 @@ func accountIDFromToken(ctx context.Context, tok string) (string, error) {
 	if out.Success && len(out.Result) > 0 {
 		return out.Result[0].ID, nil
 	}
-	// Token verify (works for some restricted tokens).
-	req2, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.cloudflare.com/client/v4/user/tokens/verify", nil)
-	req2.Header.Set("Authorization", "Bearer "+tok)
-	resp2, err := http.DefaultClient.Do(req2)
-	if err == nil {
-		defer resp2.Body.Close()
-		raw2, _ := io.ReadAll(resp2.Body)
-		var ver struct {
-			Success bool `json:"success"`
-			Result  struct {
-				Status string `json:"status"`
-			} `json:"result"`
-		}
-		_ = json.Unmarshal(raw2, &ver)
-	}
 	msg := "no Cloudflare account for token (set COGS_CF_ACCOUNT_ID or use a token with Account read)"
 	if len(out.Errors) > 0 {
 		msg = out.Errors[0].Message
@@ -135,10 +117,21 @@ func storeAccountID(wsRoot, id string) error {
 }
 
 func accountIDFromWranglerConfig() (string, error) {
-	path, err := cftoken.WranglerConfigPath()
+	path, err := wranglerpaths.ModernConfigTOML()
 	if err != nil {
 		return "", err
 	}
+	if id, err := parseAccountIDFile(path); err == nil && id != "" {
+		return id, nil
+	}
+	path, err = cftoken.WranglerConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return parseAccountIDFile(path)
+}
+
+func parseAccountIDFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -192,6 +185,10 @@ func CloudflareAuthStatus(ctx context.Context, wsRoot string) map[string]any {
 		"api_token_ok": false,
 		"message":      "",
 	}
+	if shadow, msg := wranglerpaths.ShadowDiag(); shadow {
+		out["wrangler_legacy_shadow"] = true
+		out["shadow_message"] = msg
+	}
 	c := &Client{WSRoot: wsRoot}
 	if wsRoot != "" {
 		_ = os.Setenv("COGS_WORKSPACE_ROOT", wsRoot)
@@ -201,6 +198,7 @@ func CloudflareAuthStatus(ctx context.Context, wsRoot string) map[string]any {
 		}
 	}
 	if _, err := c.Token(ctx, cftoken.ScopeAPI); err != nil {
+		out["auth_missing"] = true
 		out["message"] = "Cloudflare auth missing — set COGS_CF_API_TOKEN or run wrangler login"
 		return out
 	}
@@ -209,6 +207,12 @@ func CloudflareAuthStatus(ctx context.Context, wsRoot string) map[string]any {
 		out["account_id"] = id
 	} else {
 		out["message"] = err.Error()
+	}
+	if b, err := os.ReadFile(filepath.Join(wsRoot, ".cogs", "run", "supervisor-alerts.json")); err == nil {
+		var alerts map[string]any
+		if json.Unmarshal(b, &alerts) == nil && len(alerts) > 0 {
+			out["supervisor_alerts"] = alerts
+		}
 	}
 	return out
 }
