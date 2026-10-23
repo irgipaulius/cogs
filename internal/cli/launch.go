@@ -170,6 +170,7 @@ func runLaunch(flags launchFlags) error {
 	}
 
 	if !flags.skipPages && !m.IsCombined() {
+		_ = appbuild.RestoreTrackedUIArtifacts(abs, m.PagesDir)
 		if err := appbuild.WritePageConfig(abs, pageHost, apiHost, m); err != nil {
 			return err
 		}

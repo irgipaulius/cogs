@@ -35,6 +35,7 @@ func DeployWorker(wsRoot, appDir, pageHost, apiHost, releaseCommit string, m lau
 			return worker, nil
 		}
 	}
+	_ = appbuild.RestoreTrackedUIArtifacts(appDir, m.PagesDir)
 	if err := appbuild.WritePageConfig(appDir, pageHost, apiHost, m); err != nil {
 		return "", err
 	}

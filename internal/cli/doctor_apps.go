@@ -133,18 +133,20 @@ func doctorOne(dir string, a workspace.App, goWork string) []doctorFinding {
 				})
 			}
 		}
-		cfgPath := filepath.Join(appbuild.PagesDistDir(dir), "config.js")
-		b, err := os.ReadFile(cfgPath)
-		if err != nil {
-			cfgPath = filepath.Join(dir, m.PagesDir, "config.js")
-			b, err = os.ReadFile(cfgPath)
-		}
-		if err == nil && !m.IsCombined() {
+		distCfg := filepath.Join(appbuild.PagesDistDir(dir), "config.js")
+		b, err := os.ReadFile(distCfg)
+		if err != nil && !m.IsCombined() {
+			out = append(out, doctorFinding{
+				App: app, OK: false,
+				Problem: ".cogs/pages-dist missing (Worker UI not built for production)",
+				Fix:     "wait for reconcile worker stage or run: cogs launch " + app + " -y",
+			})
+		} else if err == nil && !m.IsCombined() {
 			if !configDeclares(string(b), wantPage, wantAPI) {
 				out = append(out, doctorFinding{
 					App: app, OK: false,
-					Problem: "config.js does not point at https://" + wantAPI,
-					Fix:     "point apiBase at https://" + wantAPI + " (the UI must not call a relative /api). cogs launch rewrites " + filepath.Join(a.Path, m.PagesDir, "config.js"),
+					Problem: "pages-dist config.js does not point at https://" + wantAPI,
+					Fix:     "re-run worker stage after Cloudflare auth is fixed",
 				})
 			}
 		}
