@@ -63,8 +63,15 @@ Deploy history lives in **`.cogs/deployments.json`** at workspace root (shared e
 | **Remove** | `POST /api/apps/{name}/remove` | `present=false` + GC reconcile |
 | **Progress** | `GET /api/reconcile/stream` (SSE) | `event: apps` — JSON array of app reconcile snapshots |
 | **Log** | `GET /api/apps/{name}/reconcile/log` | Latest reconcile log file |
+| **Backups** | `GET/POST /api/apps/{name}/backups`, `POST …/backups/{id}/restore` | List / create snapshots, restore by catalog id (root only) |
 
 There is **no** finish-install or install-job API.
+
+## Database backups (root only)
+
+App detail → **Backups** tab: list snapshots (metadata only), **Backup now**, **Restore** (confirm). Requires **`backup = true`** (and related keys) in that app’s **`cogs.app.toml`**. Restore runs **`cogs backup restore`** on the host via the API — clients send a catalog **id**, never a filesystem path.
+
+Host CLI equivalent: [backups.md](backups.md).
 
 ## GitHub and Add app (root only)
 
@@ -128,4 +135,4 @@ CoGS records hostnames in `.cogs/dns-ownership.json`. **`dnsguard`** blocks over
 - `go run ./cmd/app serve` with `COGS_ADMIN_DEV=1` relaxes unix peer checks when the binary path is not under `apps/admin`.
 - Rebuild UI: `cd apps/admin/frontend && npm run build` (output in `internal/ui/dist`).
 
-See also [deploy.md](deploy.md) for push/pull and queue setup.
+See also [deploy.md](deploy.md) for push/pull and queue setup, [backups.md](backups.md) for per-app DB snapshots.

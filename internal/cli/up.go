@@ -185,6 +185,7 @@ func runUp(root string, ws workspace.Root, noTunnel bool) error {
 			}
 		}
 		upGate.writeAlerts(root)
+		runScheduledBackups(root, ws, st, quiet)
 		if st != nil {
 			views, err := st.ListApps()
 			if err == nil && len(views) == 0 && len(ws.Apps) > 0 {

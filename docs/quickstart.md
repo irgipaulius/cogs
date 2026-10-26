@@ -10,7 +10,7 @@ CoGS (**C**loudflare + **G**o + **S**QLite) is a forkable boilerplate for self-h
 4. **Run**: `go run ./cmd/app serve -env .env` → `curl http://127.0.0.1:8080/health`
 5. **Try the todo demo**: `./cogs launch todo -y` from repo root (Wrangler login + DNS token prompt)
 6. **Ship changes**: `./cogs redeploy todo` (Worker UI + backend release)
-7. **Host supervisor (prod loop)**: `cogs up` — see [deploy.md](deploy.md)
+7. **Host supervisor (prod loop)**: `cogs up` — see [deploy.md](deploy.md) (also runs optional per-app DB backups when enabled — [backups.md](backups.md))
 8. **Admin Add app / private repos**: `gh auth login` on the server — [admin-dashboard.md](admin-dashboard.md)
 9. **Build static binary**: `cogs build --target linux/amd64`
 10. **Expose** (pick one):

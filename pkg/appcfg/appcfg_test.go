@@ -1,6 +1,9 @@
 package appcfg
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestParseTodo(t *testing.T) {
 	a, err := Parse(`
@@ -26,6 +29,38 @@ tunnel_name = "cogs-todo-app"
 	}
 	if a.KindManifest() != "" || a.TunnelName != "cogs-todo-app" {
 		t.Fatalf("%+v", a)
+	}
+}
+
+func TestParseBackupKeys(t *testing.T) {
+	a, err := Parse(`name = "todo"
+backup = true
+backup_every = "6h"
+backup_keep = 14
+backup_dir = ".cogs/backups"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := a.NormalizeBackup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.Enabled || b.Keep != 14 || b.Every != 6*time.Hour {
+		t.Fatalf("%+v", b)
+	}
+}
+
+func TestBackupEveryTooShort(t *testing.T) {
+	a, err := Parse(`name = "x"
+backup = true
+backup_every = "5m"
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.NormalizeBackup(); err == nil {
+		t.Fatal("expected error for short interval")
 	}
 }
 

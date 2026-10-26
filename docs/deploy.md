@@ -33,9 +33,16 @@ worker_name = "cogs-todo-app"   # split apps: static-assets Worker
 tunnel_name = "cogs-todo-app"
 port = 18787
 bind_host = "127.0.0.1"
+
+# optional — per-app SQLite snapshots while cogs up runs (see docs/backups.md)
+# backup = true
+# backup_every = "24h"
+# backup_keep = 7
 ```
 
 **Pull-only:** `root_directory = "apps/goldilocks"` when the monorepo path differs from the app folder.
+
+**Database backups:** opt in per app with `backup = true` and related keys. Scheduled runs happen inside **`cogs up`**; use **`cogs backup now|list|restore`** on the host or the admin **Backups** tab (root). Full reference: [backups.md](backups.md).
 
 `cogs launch`, `cogs doctor`, and `cogs up` read this file. Legacy `cogs.launch.json` is still loaded for older apps but must not be rewritten by launch.
 
@@ -124,7 +131,7 @@ cogs down            # stop apps CoGS started
 
 Boot helpers under `.cogs/boot/` (systemd unit, FreeBSD rc.d, launchd plist, Windows scheduled-task cmd, plus `cogs-up.sh` for cron/Docker).
 
-**`cogs up` also keeps `cogs supervisor run` alive** (admin dashboard).
+**`cogs up` also keeps `cogs supervisor run` alive** (admin dashboard) and, for apps with **`backup = true`**, runs due database snapshots (see [backups.md](backups.md)).
 
 ## Public admin dashboard
 
@@ -153,5 +160,6 @@ CI/CD is not duplicated inside CoGS: push mode runs builds on the host (or via d
 | Fix config / ports / DNS | `cogs doctor`, `cogs tunnel fix --dir apps/<app>` |
 | GitHub for fetch / Add app | `gh auth login && gh auth setup-git` (or `scripts/bootstrap-host.sh`) |
 | Verify host supervisor | `cogs up --foreground` or `cogs down` then `cogs up` |
+| Snapshot / restore app DB | `cogs backup now <app>`; [backups.md](backups.md) |
 
 When changing deploy behavior in code, **update this file and [AGENTS.md](AGENTS.md)** in the same change.

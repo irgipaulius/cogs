@@ -6,7 +6,7 @@ This document is for **LLM coding agents** operating the [CoGS](https://github.c
 
 Read this before changing launch behavior, adding apps, or deploying remotely.
 
-**Deploy deep dive:** [deploy.md](deploy.md) (push/pull, releases, queue, GitHub).
+**Deploy deep dive:** [deploy.md](deploy.md) (push/pull, releases, queue, GitHub). **DB backups:** [backups.md](backups.md) (`backup*` keys in **`cogs.app.toml`**, `cogs backup`, admin Backups tab).
 
 ## Mental model
 
@@ -25,7 +25,7 @@ Read this before changing launch behavior, adding apps, or deploying remotely.
 ```
 cogs.workspace.json     # monorepo app index (canonical app ids: todo, admin, goldilocks)
 apps/<name>/
-  cogs.app.toml         # per-app source of truth (deploy_mode, zone, ports, worker_name, …)
+  cogs.app.toml         # per-app source of truth (deploy_mode, zone, ports, worker_name, backup*, …)
   cogs.launch.json      # legacy; do not auto-save from launch
 cmd/cogs/               # CLI entry
 internal/cli/           # launch, up, deploy, cf, github, queue pull
@@ -175,6 +175,7 @@ If SSH details are unknown, **stop and ask the user** for host, user, arch, and 
 | First-time / infra | `cogs launch todo -y` |
 | Daily ship (push) | `cogs redeploy todo` |
 | Host supervisor | `cogs up` / `cogs down` |
+| DB backup / restore | `cogs backup now|list|restore <app>` — [backups.md](backups.md) |
 | GitHub on host | `gh auth status` / `cogs github status` |
 | Health check | `cogs ping todo` |
 | DNS/tunnel repair | `cogs tunnel fix --dir apps/todo` |
@@ -198,6 +199,7 @@ If SSH details are unknown, **stop and ask the user** for host, user, arch, and 
 |------|----------|
 | [AGENTS.md](AGENTS.md) | LLM agents (this file) |
 | [deploy.md](deploy.md) | Push/pull, releases, queue, GitHub |
+| [backups.md](backups.md) | Per-app SQLite snapshots, restore, command driver |
 | [admin-dashboard.md](admin-dashboard.md) | Public admin SPA + supervisor |
 | [quickstart.md](quickstart.md) | Humans, first run |
 | [cloudflare-setup.md](cloudflare-setup.md) | CF dashboard + tokens |

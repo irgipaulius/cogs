@@ -83,3 +83,16 @@ CREATE TABLE IF NOT EXISTS workspace_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reconcile_runs_app ON reconcile_runs(app_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_backups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  app_id TEXT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+  rel_path TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  bytes INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT NOT NULL DEFAULT '',
+  driver TEXT NOT NULL DEFAULT 'sqlite',
+  error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_backups_app ON app_backups(app_id, created_at DESC);

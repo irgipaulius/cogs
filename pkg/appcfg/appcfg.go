@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const Filename = "cogs.app.toml"
@@ -33,6 +34,7 @@ type App struct {
 	GitRepo        string
 	WorkerName     string // Cloudflare Worker for static UI (split apps)
 	RootDirectory  string // monorepo path in git repo for builds
+	Backup         Backup
 }
 
 const (
@@ -146,6 +148,38 @@ func apply(a *App, key, raw string) error {
 		a.WorkerName = unquote(raw)
 	case "root_directory":
 		a.RootDirectory = unquote(raw)
+	case "backup":
+		a.Backup.Enabled = raw == "true"
+	case "backup_every":
+		d, err := time.ParseDuration(unquote(raw))
+		if err != nil {
+			return err
+		}
+		a.Backup.Every = d
+	case "backup_keep":
+		n, err := strconv.Atoi(unquote(raw))
+		if err != nil {
+			return err
+		}
+		a.Backup.Keep = n
+	case "backup_dir":
+		a.Backup.Dir = unquote(raw)
+	case "backup_driver":
+		a.Backup.Driver = unquote(raw)
+	case "backup_db":
+		a.Backup.DBRelPath = unquote(raw)
+	case "backup_snapshot":
+		argv, err := parseJSONArgv(unquote(raw))
+		if err != nil {
+			return err
+		}
+		a.Backup.SnapshotArgv = argv
+	case "backup_restore":
+		argv, err := parseJSONArgv(unquote(raw))
+		if err != nil {
+			return err
+		}
+		a.Backup.RestoreArgv = argv
 	default:
 		return fmt.Errorf("unknown key %q", key)
 	}

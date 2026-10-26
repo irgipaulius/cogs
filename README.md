@@ -42,7 +42,7 @@ Think of three layers:
 
 1. **Workers (assets only)** serve the UI from `public/` after you build the frontend (**push** mode), or **Workers Builds** builds the UI in the cloud (**pull** mode — host deploys API only when the build succeeds).
 2. **Tunnel** connects Cloudflare to your API on loopback—only outbound traffic from your machine.
-3. **SQLite** holds the data. You back it up like any file. Optionally, **`cogs sync`** pushes read copies to D1/R2.
+3. **SQLite** holds the data. Opt in per app with **`backup = true`** in **`cogs.app.toml`** for scheduled snapshots while **`cogs up`** runs ([backups.md](docs/backups.md)), or copy the `.db` yourself. Optionally, **`cogs sync`** pushes read copies to D1/R2.
 
 Each app declares **push vs pull** in **`apps/<name>/cogs.app.toml`**. Backends deploy via a shared **release** path (worktree build, health check, `.cogs/releases/<app>/current`). Details: [docs/deploy.md](docs/deploy.md).
 
@@ -80,7 +80,7 @@ Optional: run **`cogs up`** on the host so apps, tunnels, and pull-mode deploy q
 
 Open the URLs printed at the end. Local admin metrics (loopback only): `http://127.0.0.1:8080/admin`.
 
-More detail: [Quickstart](docs/quickstart.md) · [Deploy (push/pull)](docs/deploy.md) · [Cloudflare setup](docs/cloudflare-setup.md) · [Install CLI without cloning](docs/install.md)
+More detail: [Quickstart](docs/quickstart.md) · [Deploy (push/pull)](docs/deploy.md) · [Backups](docs/backups.md) · [Cloudflare setup](docs/cloudflare-setup.md) · [Install CLI without cloning](docs/install.md)
 
 ---
 
@@ -110,6 +110,7 @@ Add **`cogs.app.toml`**, register the app in `cogs.workspace.json`, `go work use
 | **Migrations** | Goose + sqlc-friendly layout |
 | **Security helpers** | Turnstile sessions, rate limits, optional Cloudflare Access |
 | **`cogs sync`** | SQLite stays truth; D1/R2 get projections for edge reads |
+| **Per-app backups** | `backup*` in `cogs.app.toml`, `cogs backup`, admin Backups tab — [backups.md](docs/backups.md) |
 | **Reference app** | [apps/todo](apps/todo) — offline queue, R2 uploads, link stats |
 | **Examples** | [geo-points](examples/geo-points), [worker-client](examples/worker-client) |
 

@@ -39,6 +39,8 @@ func Run(args []string) error {
 		return cmdDeps(args[1:])
 	case "restore-test":
 		return cmdRestoreTest(args[1:])
+	case "backup":
+		return cmdBackup(args[1:])
 	case "doctor":
 		return cmdDoctor(args[1:])
 	case "up":
@@ -100,6 +102,7 @@ Usage:
   cogs sync [--delete] | cogs sync --checksum | cogs sync --rebuild
   cogs deps --target os/arch
   cogs restore-test <backup.db>
+  cogs backup now|list|restore <app> [--yes]
   cogs admin init|check           public dashboard bootstrap
   cogs supervisor run             control plane (unix socket)
   cogs doctor                     check zone, DNS token, tunnels, ports, go.work, config.js

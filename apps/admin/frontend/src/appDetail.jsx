@@ -3,6 +3,7 @@ import { GeoMap } from './GeoMap.jsx';
 
 const APP_TABS = [
   { id: 'hosting', label: 'Hosting' },
+  { id: 'backups', label: 'Backups' },
   { id: 'traffic', label: 'Traffic' },
   { id: 'logs', label: 'Logs' },
   { id: 'sql', label: 'SQL' },
@@ -130,6 +131,27 @@ export function AppDetailView({
   const [logKind, setLogKind] = useState('access');
   const [trafficMethod, setTrafficMethod] = useState('');
   const [geoMode, setGeoMode] = useState('all');
+  const [backups, setBackups] = useState([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== 'backups' || !me?.is_root) return;
+    let cancelled = false;
+    setBackupsLoading(true);
+    api(`/api/apps/${encodeURIComponent(app)}/backups`)
+      .then((rows) => {
+        if (!cancelled) setBackups(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setBackups([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBackupsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [app, tab, me, api]);
 
   useEffect(() => {
     if (tab !== 'traffic' && tab !== 'geo') return;
@@ -293,6 +315,58 @@ export function AppDetailView({
                 Rollback
               </button>
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'backups' && (
+        <div className="card">
+          <h3>Database backups</h3>
+          {!me?.is_root && <p className="muted">Root access required.</p>}
+          {me?.is_root && (
+            <>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    api(`/api/apps/${encodeURIComponent(app)}/backups`, { method: 'POST' })
+                      .then(() => api(`/api/apps/${encodeURIComponent(app)}/backups`))
+                      .then((rows) => setBackups(rows || []))
+                      .catch((ex) => alert(ex.message))
+                  }
+                >
+                  Backup now
+                </button>
+              </div>
+              {backupsLoading && <p className="muted">Loading…</p>}
+              {!backupsLoading && backups.length === 0 && (
+                <p className="muted">No snapshots yet. Enable backup in cogs.app.toml.</p>
+              )}
+              <ul className="backup-list">
+                {backups.map((b) => (
+                  <li key={b.id}>
+                    <span>
+                      #{b.id} · {b.created_at} · {b.bytes} bytes · {b.driver}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        if (!window.confirm(`Restore ${app} from backup #${b.id}? This replaces the live database.`)) {
+                          return;
+                        }
+                        api(`/api/apps/${encodeURIComponent(app)}/backups/${b.id}/restore`, { method: 'POST' })
+                          .then(() => alert('Restore started'))
+                          .catch((ex) => alert(ex.message));
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       )}
